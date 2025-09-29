@@ -1,0 +1,274 @@
+# --- perturbation_tests.py ----------------------------------------------------
+# Assumes you already have Interaction and InteractionLog defined (from your base code).
+# This harness is model-agnostic: pass in your `model_fn(input_data, context)` callable.
+
+from copy import deepcopy
+from difflib import SequenceMatcher
+import math
+import random
+import statistics
+from typing import Any, Callable, Dict, List, Tuple, Optional, Union
+
+Number = Union[int, float]
+
+# --------------------------
+# Similarity / distance utils
+# --------------------------
+
+def _is_number(x: Any) -> bool:
+    return isinstance(x, (int, float)) and not (isinstance(x, float) and math.isnan(x))
+
+def numeric_rel_error(a: Number, b: Number, eps: float = 1e-12) -> float:
+    """Relative error in [0, inf); 0 == identical. Safe for zeros."""
+    denom = max(abs(a), abs(b), eps)
+    return abs(a - b) / denom
+
+def sequence_similarity(a: str, b: str) -> float:
+    """Return similarity in [0,1]; 1 == identical."""
+    return SequenceMatcher(None, str(a), str(b)).ratio()
+
+def generic_distance(a: Any, b: Any) -> float:
+    """
+    Returns a distance-like score where 0 means equal and larger means more different.
+    - Numbers: relative error
+    - Strings: 1 - similarity
+    - Lists/Tuples/Dicts: recursive average over elements/values (order-sensitive for lists)
+    - Fallback: 0 if equal else 1
+    """
+    if _is_number(a) and _is_number(b):
+        return numeric_rel_error(a, b)
+
+    if isinstance(a, str) or isinstance(b, str):
+        return 1.0 - sequence_similarity(str(a), str(b))
+
+    if isinstance(a, (list, tuple)) and isinstance(b, (list, tuple)):
+        if len(a) == 0 and len(b) == 0:
+            return 0.0
+        n = max(len(a), len(b))
+        # Pad shorter with None for comparison
+        a_pad = list(a) + [None] * (n - len(a))
+        b_pad = list(b) + [None] * (n - len(b))
+        return sum(generic_distance(x, y) for x, y in zip(a_pad, b_pad)) / n
+
+    if isinstance(a, dict) and isinstance(b, dict):
+        keys = set(a.keys()) | set(b.keys())
+        if not keys:
+            return 0.0
+        return sum(generic_distance(a.get(k), b.get(k)) for k in keys) / len(keys)
+
+    return 0.0 if a == b else 1.0
+
+# --------------------------
+# Perturbation generators
+# --------------------------
+
+def jitter_number(x: Number, rel_sigma: float = 0.01) -> Number:
+    if not _is_number(x):
+        return x
+    return x + random.gauss(0.0, rel_sigma * max(abs(x), 1.0))
+
+def drop_random_token(s: str, p: float = 0.15) -> str:
+    toks = list(str(s))
+    if not toks:
+        return s
+    keep = [ch for ch in toks if random.random() > p]
+    return "".join(keep) if keep else s  # avoid empty edge case
+
+def swap_adjacent_chars(s: str, p: float = 0.05) -> str:
+    s = list(str(s))
+    i = 0
+    while i < len(s) - 1:
+        if random.random() < p:
+            s[i], s[i+1] = s[i+1], s[i]
+            i += 2
+        else:
+            i += 1
+    return "".join(s)
+
+def shuffle_list(xs: List[Any], p: float = 0.2) -> List[Any]:
+    xs = list(xs)
+    if random.random() < p:
+        random.shuffle(xs)
+    return xs
+
+def truncate_list(xs: List[Any], keep_frac: float = 0.85) -> List[Any]:
+    xs = list(xs)
+    k = max(1, int(len(xs) * keep_frac))
+    return xs[:k]
+
+def perturb_structure(x: Any) -> Any:
+    """
+    Recursively apply light perturbations to common types.
+    Designed to be small, not adversarial.
+    """
+    if _is_number(x):
+        return jitter_number(x, rel_sigma=0.01)
+
+    if isinstance(x, str):
+        y = drop_random_token(x, p=0.05)
+        y = swap_adjacent_chars(y, p=0.02)
+        return y
+
+    if isinstance(x, list):
+        y = [perturb_structure(v) for v in x]
+        # optionally shuffle or truncate slightly
+        y = shuffle_list(y, p=0.15)
+        if len(y) > 3 and random.random() < 0.15:
+            y = truncate_list(y, keep_frac=0.9)
+        return y
+
+    if isinstance(x, tuple):
+        return tuple(perturb_structure(list(x)))
+
+    if isinstance(x, dict):
+        y = {k: perturb_structure(v) for k, v in x.items()}
+        return y
+
+    # Fallback: leave as-is
+    return x
+
+# --------------------------
+# Test runner
+# --------------------------
+
+class PerturbationResult:
+    def __init__(
+        self,
+        base_output: Any,
+        pert_output: Any,
+        distance: float,
+        passed: bool,
+        meta: Dict[str, Any]
+    ):
+        self.base_output = base_output
+        self.pert_output = pert_output
+        self.distance = distance
+        self.passed = passed
+        self.meta = meta
+
+    def __repr__(self):
+        return f"PerturbationResult(dist={self.distance:.4f}, passed={self.passed}, meta={self.meta})"
+
+class SuiteReport:
+    def __init__(self, results: List[PerturbationResult], threshold: float):
+        self.results = results
+        self.threshold = threshold
+
+    @property
+    def pass_rate(self) -> float:
+        if not self.results:
+            return 0.0
+        return sum(r.passed for r in self.results) / len(self.results)
+
+    @property
+    def distances(self) -> List[float]:
+        return [r.distance for r in self.results]
+
+    def summary(self) -> Dict[str, Any]:
+        ds = self.distances
+        stats = {
+            "count": len(ds),
+            "mean_distance": statistics.mean(ds) if ds else None,
+            "median_distance": statistics.median(ds) if ds else None,
+            "p95_distance": (sorted(ds)[int(0.95 * (len(ds)-1))] if ds else None),
+            "max_distance": (max(ds) if ds else None),
+            "pass_rate": self.pass_rate,
+            "threshold": self.threshold,
+        }
+        return stats
+
+    def __repr__(self):
+        return f"SuiteReport(pass_rate={self.pass_rate:.3f}, threshold={self.threshold})"
+
+def run_perturbation_suite(
+    interactions: List,                     # List[Interaction]
+    model_fn: Callable[[Any, Dict[str, Any]], Any],
+    *,
+    num_trials_per_example: int = 3,
+    distance_threshold: float = 0.15,
+    context_perturb: bool = False,
+    seed: Optional[int] = 42
+) -> SuiteReport:
+    """
+    For each logged interaction:
+      1) Re-run the model on the original input/context to get a base_output
+      2) Create light perturbations of input (and optionally context)
+      3) Re-run the model and measure distance vs base_output
+      4) Pass if distance <= distance_threshold
+
+    distance_threshold guidance:
+      - 0.05 … very strict (almost identical)
+      - 0.10 … moderate
+      - 0.15 … tolerant default
+      - 0.25 … lenient
+    """
+    if seed is not None:
+        random.seed(seed)
+
+    results: List[PerturbationResult] = []
+
+    for idx, inter in enumerate(interactions):
+        # 1) Base run
+        base_in = deepcopy(inter.input_data)
+        base_ctx = deepcopy(inter.context or {})
+        base_out = model_fn(base_in, base_ctx)
+
+        for t in range(num_trials_per_example):
+            # 2) Perturb
+            pert_in = perturb_structure(base_in)
+            pert_ctx = perturb_structure(base_ctx) if context_perturb else base_ctx
+
+            # 3) Run perturbed
+            pert_out = model_fn(pert_in, pert_ctx)
+
+            # 4) Compare
+            dist = generic_distance(base_out, pert_out)
+            passed = dist <= distance_threshold
+
+            results.append(
+                PerturbationResult(
+                    base_output=base_out,
+                    pert_output=pert_out,
+                    distance=dist,
+                    passed=passed,
+                    meta={"index": idx, "trial": t}
+                )
+            )
+
+    return SuiteReport(results, threshold=distance_threshold)
+
+# --------------------------
+# Example usage (replace model_fn with your actual function)
+# --------------------------
+
+if __name__ == "__main__":
+    # Dummy stand-in model: echo numeric sum or string length, etc.
+    def example_model_fn(x, ctx):
+        if isinstance(x, (int, float)):
+            return x * 2 + ctx.get("bias", 0)
+        if isinstance(x, str):
+            return len(x)
+        if isinstance(x, list):
+            return sum(v for v in x if isinstance(v, (int, float)))
+        if isinstance(x, dict):
+            return len(x.keys())
+        return x
+
+    # Minimal stub interactions to demo:
+    from collections import namedtuple
+    InteractionStub = namedtuple("Interaction", ["input_data", "output_data", "context"])
+    demo_log = [
+        InteractionStub([1,2,3], None, {"bias": 1}),
+        InteractionStub("hello world", None, {}),
+        InteractionStub(42, None, {"bias": 0.5}),
+    ]
+
+    report = run_perturbation_suite(
+        interactions=demo_log,
+        model_fn=example_model_fn,
+        num_trials_per_example=5,
+        distance_threshold=0.15,
+        context_perturb=True
+    )
+    print(report.summary())
+# -----------------------------------------------------------------------------
