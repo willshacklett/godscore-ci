@@ -15,3 +15,4 @@ def test_bounds_on_typical_inputs():
         assert math.isfinite(y)
         # Must be normalized in [0, 1]
         assert 0.0 <= y <= 1.0
+# CLAIM: GLB-1 (Global coherence — outputs stay within normalized bounds)
