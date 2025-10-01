@@ -52,6 +52,7 @@ def approx(a, b, tol=1e-9):
     return abs(a - b) <= tol
 
 
+# CLAIM: GLB-1 (Global coherence — result must not depend on component order)
 def test_commutativity():
     comps1 = {"a": 0.2, "b": 0.9, "c": 0.5}
     comps2 = {"b": 0.9, "c": 0.5, "a": 0.2}
@@ -60,6 +61,7 @@ def test_commutativity():
     assert approx(r1, r2), "Order of components must not change the result"
 
 
+# CLAIM: GLB-1 (Global coherence — grouping/associativity should not change the aggregate)
 def test_associativity_approx():
     # Grouping should be approximately associative for a weighted average
     A = {"x": 0.2, "y": 0.8}
@@ -77,6 +79,7 @@ def test_associativity_approx():
     assert approx(r_all, r_two, tol=1e-9), "Aggregation should be approx-associative"
 
 
+# CLAIM: GLB-1 (Global coherence — increasing a component must not reduce the score)
 def test_monotonicity():
     base = {"a": 0.2, "b": 0.3, "c": 0.4}
     low = god_variable(base)
@@ -87,6 +90,7 @@ def test_monotonicity():
     assert high >= low, "Increasing a component must not reduce the score"
 
 
+# CLAIM: GLB-1 (Global coherence — weights modulate influence predictably, like couplings)
 def test_weighting_effect():
     comps = {"a": 0.2, "b": 0.9}
     # Heavier weight on 'b' should pull result closer to 0.9
@@ -95,10 +99,13 @@ def test_weighting_effect():
     assert r_b_heavy > r_equal, "Increasing a component's weight should raise its influence"
 
 
+# CLAIM: GLB-1 (Global coherence — outputs remain within global bounds after clamping)
 def test_bounds_respected():
     comps = {"a": -100, "b": 1000}
     r = god_variable(comps, bounds=(0.0, 1.0))
     assert 0.0 <= r <= 1.0, "Aggregation must respect bounds after clamping"
 
 
-def test_missing_weights_default_to_zero_not_crash
+# CLAIM: GLB-1 (Global coherence — robust defaults; missing weights handled without crashing)
+def test_missing_weights_default_to_zero_not_crash():
+
