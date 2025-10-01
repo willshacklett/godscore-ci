@@ -5,6 +5,7 @@ import numpy as np
 # If it's in a different module/name, tell me and I'll tweak the import.
 from godscore import god_variable
 
+# CLAIM: GLB-1 (Global coherence — outputs stay finite and increase monotonically with inputs)
 def test_finiteness_and_monotonicity():
     m = 1.0
     gv1 = god_variable(1.0, m)   # smaller energy
