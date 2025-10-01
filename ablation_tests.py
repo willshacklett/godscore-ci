@@ -183,3 +183,4 @@ def run_ablation_suite(
 
     return AblationReport(rows)
 # ------------------------------------------------------------------------------
+# CLAIM: GLB-1 (Global coherence — God Variable must outperform baseline across tasks)
