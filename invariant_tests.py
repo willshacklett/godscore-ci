@@ -124,3 +124,4 @@ def run_invariant_suite(
 
     return InvariantReport(results, expected_range)
 # -------------------------------------------------------------------------------
+# CLAIM: GLB-1 (Global coherence — determinism, finiteness, and range compliance for the God Variable)
