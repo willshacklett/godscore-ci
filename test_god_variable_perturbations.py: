@@ -1,3 +1,8 @@
+# CLAIMS (file-level):
+# EM-1 — Electron stability under small perturbations (continuity/Lipschitz-like behavior)
+# GR-1 — No runaway/divergence from small perturbations (gravitational stability)
+# DM-1 — Symmetric response to ± perturbations (hidden-channel/halo stability)
+
 # --- perturbation_tests.py ----------------------------------------------------
 # Assumes you already have Interaction and InteractionLog defined (from your base code).
 # This harness is model-agnostic: pass in your `model_fn(input_data, context)` callable.
