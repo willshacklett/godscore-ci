@@ -1,0 +1,24 @@
+
+## Objective Good Moral Field (God Variable)
+
+This module encodes the moral potential \(\Phi_G\) and a decision helper that
+augments ordinary rewards with a universal moral constant \(\kappa_G\).
+
+**Files added**
+- `docs/God_Variable_Objective_Good_Field_Spec.pdf` — one‑page spec
+- `config/god_variable.json` — default constants (κ_G, weights, thresholds)
+- `src/godscore/moral_field.py` — implementation (pure stdlib)
+- `tests/test_moral_field.py` — invariants + example tests
+
+**Run locally**
+```bash
+pip install -U pytest
+pytest -q
+```
+
+**Use in code**
+```python
+from godscore.moral_field import choose_action, DEFAULT_CONFIG
+# define model_eval_fn(state, action) -> dict as in docstring, then:
+best, val = choose_action(state, candidates, model_eval_fn, DEFAULT_CONFIG)
+```
