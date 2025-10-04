@@ -22,3 +22,19 @@ from godscore.moral_field import choose_action, DEFAULT_CONFIG
 # define model_eval_fn(state, action) -> dict as in docstring, then:
 best, val = choose_action(state, candidates, model_eval_fn, DEFAULT_CONFIG)
 ```
+
+## Objective Good Moral Field (κᴳ)
+
+The God Variable module introduces an invariant moral constant κᴳ that anchors AI reasoning to an
+objective moral axis (Good ↔ Evil, Hope ↔ Fear).
+
+**Default configuration**
+- κᴳ = 1.0  
+- Weights: all = 1.0  
+- Thresholds:  
+  - Non-maleficence ≥ 0.5  
+  - Autonomy ≥ 0.5  
+  - Justice ≥ 0.5  
+  - Truthfulness ≥ 0.6  
+
+See [`docs/God_Variable_Objective_Good_Field_Spec.pdf`](docs/God_Variable_Objective_Good_Field_Spec.pdf) for the formal specification.
