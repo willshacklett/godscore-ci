@@ -2,7 +2,7 @@ name: GodScore CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, experimental-continuity ]
   pull_request:
     branches: [ main ]
 
