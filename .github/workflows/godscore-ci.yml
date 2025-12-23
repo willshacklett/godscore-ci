@@ -7,9 +7,12 @@ on:
       - experimental-continuity
       - gv-baseline-v1
       - gv-toy-survival-experiment
+      - plot-gv-survival
+      - gv-ablation-error-correction
 
   pull_request:
     branches: [ main ]
+
 
 jobs:
   test:
