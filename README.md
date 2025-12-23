@@ -27,3 +27,22 @@ or centralized power contradicts its purpose.
 
 This repository currently focuses on CI workflows and test scaffolding.
 The objective logic and scoring mechanisms are intentionally modular and auditable.
+
+## Toy Survivability Experiment (Falsifiable Demonstration)
+
+This repository includes a minimal, non-physical toy model demonstrating a
+selection principle underlying the God Variable (Gv).
+
+In the experiment, simple systems are subjected to repeated stochastic
+perturbations. Systems with higher Gv proxy scores—reflecting robustness,
+coherence, adaptability, and error correction—statistically outlive more
+fragile systems on average.
+
+This experiment is intentionally simple and makes no claim to model physical
+reality. Its purpose is to demonstrate a falsifiable selection effect under
+perturbation, not to explain the origin of the universe.
+
+See:
+- `godscore_ci/toy_sim.py`
+- `tests/test_toy_survival.py`
+
