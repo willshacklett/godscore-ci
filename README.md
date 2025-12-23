@@ -1,5 +1,31 @@
 # GodScore CI
 
+## Irreversibility & Emergent Alignment Demo
+
+This repository includes a deterministic demonstration showing that
+optimization under a God Variable (Gv) penalty naturally avoids
+irreversible actions that collapse future option space.
+
+### What this shows
+Without encoding ethics, values, or rules, a planning agent optimized
+under Gv prefers:
+- reversible actions
+- corrigible strategies
+- long-horizon survivability
+
+over short-term destructive gains.
+
+### How it works
+- A toy environment defines **irreversibility** as permanent loss of future options
+- A finite-horizon value iteration planner includes a Gv penalty
+- Tests verify:
+  - correct detection of irreversible actions
+  - a policy shift away from irreversible shortcuts
+
+### Run the demo
+```bash
+python experiments/exp_irreversibility_vi.py
+
 ![CI](https://github.com/willshacklett/godscore-ci/actions/workflows/godscore-ci.yml/badge.svg)
 
 GodScore CI is an experimental continuous-integration framework for evaluating
