@@ -49,3 +49,4 @@ See:
 - `godscore_ci/toy_sim.py`
 - `tests/test_toy_survival.py`
 
+An ablation test further shows that removing error correction causes a substantial collapse in survivability, even when other factors are held constant.
