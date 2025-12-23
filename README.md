@@ -42,6 +42,9 @@ This experiment is intentionally simple and makes no claim to model physical
 reality. Its purpose is to demonstrate a falsifiable selection effect under
 perturbation, not to explain the origin of the universe.
 
+To visualize the relationship between Gv score and survival time, run:
+`python scripts/plot_gv_survival.py`
+
 See:
 - `godscore_ci/toy_sim.py`
 - `tests/test_toy_survival.py`
