@@ -2,7 +2,12 @@ name: GodScore CI
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
+      - experimental-continuity
+      - gv-baseline-v1
+      - gv-toy-survival-experiment
+
   pull_request:
     branches: [ main ]
 
