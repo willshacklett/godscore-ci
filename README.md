@@ -23,10 +23,10 @@ over short-term destructive gains.
   - a policy shift away from irreversible shortcuts
 
 ### Run the demo
+
 ```bash
 python experiments/exp_irreversibility_vi.py
 
-![CI](https://github.com/willshacklett/godscore-ci/actions/workflows/godscore-ci.yml/badge.svg)
 
 GodScore CI is an experimental continuous-integration framework for evaluating
 systems not only on correctness and performance, but on **long-term coherence,
