@@ -23,3 +23,9 @@ jobs:
       - name: Run Gv gate
         run: python gv_gate.py --score 0.82
 
+      - name: Upload Gv run history
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gv-run-history
+          path: gv_runs.jsonl
