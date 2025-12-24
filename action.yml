@@ -1,0 +1,35 @@
+name: "GodScore CI"
+description: "Survivability-aware CI gate enforcing God Variable (Gv) thresholds"
+author: "William Shacklett"
+
+inputs:
+  score:
+    description: "God Variable score to evaluate"
+    required: true
+  threshold:
+    description: "Minimum allowed Gv score"
+    required: false
+    default: "0.80"
+
+outputs:
+  passed:
+    description: "Whether the Gv gate passed"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+
+    - name: Install dependencies
+      run: pip install pyyaml
+      shell: bash
+
+    - name: Run GodScore gate
+      run: |
+        python gv_gate.py \
+          --score "${{ inputs.score }}" \
+          --threshold "${{ inputs.threshold }}"
+      shell: bash
