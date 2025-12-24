@@ -76,6 +76,7 @@ It is intended for:
 GodScore CI does not only evaluate absolute survivability — it also detects **negative trends over time**.
 
 A regression occurs when the current Gv score drops significantly below recent historical performance.
+Free mode surfaces regressions early; Pro mode enforces them at the gate.
 
 ### Regression Handling by Mode
 
