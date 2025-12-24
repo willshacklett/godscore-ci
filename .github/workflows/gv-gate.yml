@@ -21,7 +21,20 @@ jobs:
         run: |
           pip install pyyaml
 
+      # ----------------------------
+      # FREE TIER (always runs)
+      # ----------------------------
+      - name: Run GodScore Gate (FREE)
+        run: |
+          python gv_gate.py \
+            --score 0.82 \
+            --mode free
+
+      # ----------------------------
+      # PRO TIER (only if token exists)
+      # ----------------------------
       - name: Run GodScore Gate (PRO)
+        if: secrets.GV_PRO_TOKEN != ''
         env:
           GV_PRO_TOKEN: ${{ secrets.GV_PRO_TOKEN }}
         run: |
@@ -29,6 +42,9 @@ jobs:
             --score 0.82 \
             --mode pro
 
+      # ----------------------------
+      # Upload run history
+      # ----------------------------
       - name: Upload Gv run history
         if: always()
         uses: actions/upload-artifact@v4
