@@ -15,6 +15,11 @@ inputs:
     required: false
     default: "0.80"
 
+      mode:
+    description: "Execution mode: free (warn on regression) or pro (fail on regression)"
+    required: false
+    default: "free"
+
 outputs:
   passed:
     description: "Whether the Gv gate passed"
