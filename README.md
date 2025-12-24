@@ -1,78 +1,73 @@
 # GodScore CI
 
-## Irreversibility & Emergent Alignment Demo
+**GodScore CI** is an experimental continuous integration (CI) framework that extends traditional software testing beyond correctness and performance.
 
-This repository includes a deterministic demonstration showing that
-optimization under a God Variable (Gv) penalty naturally avoids
-irreversible actions that collapse future option space.
+It introduces an additional evaluative dimension — the **God Variable (Gv)** — designed to penalize behaviors that undermine long-term system survivability, corrigibility, and ethical coherence.
 
-### What this shows
-Without encoding ethics, values, or rules, a planning agent optimized
-under Gv prefers:
-- reversible actions
-- corrigible strategies
-- long-horizon survivability
+---
 
-over short-term destructive gains.
+## Why GodScore CI Exists
 
-### How it works
-- A toy environment defines **irreversibility** as permanent loss of future options
-- A finite-horizon value iteration planner includes a Gv penalty
-- Tests verify:
-  - correct detection of irreversible actions
-  - a policy shift away from irreversible shortcuts
+Modern CI pipelines answer questions like:
+- Does the code run?
+- Is it fast?
+- Does it pass tests?
 
-### Run the demo
+GodScore CI asks deeper questions:
+- Does this system suppress its own ability to be corrected?
+- Does optimization create irreversible harm?
+- Does short-term success compromise long-term survivability?
 
-```bash
-python experiments/exp_irreversibility_vi.py
+If the answer is yes, the **God Variable score decreases**.
 
+---
 
-GodScore CI is an experimental continuous-integration framework for evaluating
-systems not only on correctness and performance, but on **long-term coherence,
-auditability, and harm avoidance**.
+## The God Variable (Gv)
 
-## Core Idea
+The God Variable is **not a moral authority** and **not a claim of truth**.
 
-GodScore introduces a scoring layer intended to penalize:
-- irreversible harm,
-- suppression of correction or dissent,
-- moral certainty without falsifiability,
-- optimization paths that collapse long-term system survivability.
+It is a **filter**:
+- Penalizes irreversible actions
+- Penalizes suppression of error correction
+- Penalizes unfalsifiable moral certainty
+- Rewards openness, reversibility, and long-term coherence
 
-The goal is not to define truth, ideology, or authority, but to preserve the
-conditions under which intelligent systems can continue to correct themselves.
+The goal is not to define “good” —  
+the goal is to **preserve the conditions under which correction remains possible indefinitely**.
 
-## Non-Claim
+---
 
-This project does **not** assert moral superiority, religious authority, or
-political alignment. Any use of GodScore to justify coercion, irreversibility,
-or centralized power contradicts its purpose.
+## What This Repository Contains
+
+- A minimal, test-driven baseline implementation of the God Variable
+- CI workflows that evaluate invariants, perturbations, and failure modes
+- Experimental extensions exploring learning, feedback, and survivability metrics
+
+This repository is intentionally explicit, modular, and auditable.
+
+---
+
+## What This Is Not
+
+- ❌ A religious claim  
+- ❌ A political framework  
+- ❌ A final moral system  
+
+GodScore CI is an **engineering experiment**.
+
+---
 
 ## Status
 
-This repository currently focuses on CI workflows and test scaffolding.
-The objective logic and scoring mechanisms are intentionally modular and auditable.
+⚠️ This project is experimental and under active development.
 
-## Toy Survivability Experiment (Falsifiable Demonstration)
+The framework is intended to evolve through testing, critique, and real-world use.
 
-This repository includes a minimal, non-physical toy model demonstrating a
-selection principle underlying the God Variable (Gv).
+---
 
-In the experiment, simple systems are subjected to repeated stochastic
-perturbations. Systems with higher Gv proxy scores—reflecting robustness,
-coherence, adaptability, and error correction—statistically outlive more
-fragile systems on average.
+## Authorship
 
-This experiment is intentionally simple and makes no claim to model physical
-reality. Its purpose is to demonstrate a falsifiable selection effect under
-perturbation, not to explain the origin of the universe.
+Created and maintained by **William Shacklett**.
 
-To visualize the relationship between Gv score and survival time, run:
-`python scripts/plot_gv_survival.py`
+Concept, framework, and implementation are original works developed as part of the *God Variable* research project.
 
-See:
-- `godscore_ci/toy_sim.py`
-- `tests/test_toy_survival.py`
-
-An ablation test further shows that removing error correction causes a substantial collapse in survivability, even when other factors are held constant.
