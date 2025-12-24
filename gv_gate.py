@@ -1,30 +1,47 @@
 import argparse
+import json
 import os
 import sys
-import json
-from typing import Any, Dict, Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 # ----------------------------
 # Defaults
 # ----------------------------
+
 DEFAULT_THRESHOLD = 0.80
 DEFAULT_CONFIG_PATH = ".godscore.yml"
+
 DEFAULT_MODE = "free"  # free | pro
+
 DEFAULT_HISTORY_WINDOW = 5
 DEFAULT_MAX_REGRESSION = 0.02  # allowed drop vs recent baseline average
 
-RUN_LOG_PATH = Path("gv_runs.jsonl")
+DEFAULT_RUN_LOG = Path("gv_runs.jsonl")
+
+# Exit codes (kept stable & explicit)
+EXIT_OK = 0
+EXIT_BAD_INPUT = 2
+EXIT_PRO_TOKEN_MISSING = 3
+EXIT_THRESHOLD_FAIL = 4
+EXIT_REGRESSION_FAIL = 5
+
 
 # ----------------------------
 # Helpers
 # ----------------------------
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
 def _coerce_float(x: Any) -> Optional[float]:
     try:
         return float(x)
     except Exception:
         return None
+
 
 def _coerce_int(x: Any) -> Optional[int]:
     try:
@@ -32,180 +49,290 @@ def _coerce_int(x: Any) -> Optional[int]:
     except Exception:
         return None
 
+
 def _try_load_yaml(path: str) -> Dict[str, Any]:
     if not os.path.exists(path):
         return {}
     try:
         import yaml  # type: ignore
     except Exception:
+        # YAML dependency may not be installed in some contexts
         return {}
-    with open(path, "r", encoding="utf-8") as f:
-        data = yaml.safe_load(f) or {}
-    return data if isinstance(data, dict) else {}
 
-def _append_run_log(record: Dict[str, Any]) -> None:
-    record = dict(record)
-    record["timestamp"] = datetime.utcnow().isoformat() + "Z"
-    with RUN_LOG_PATH.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(record) + "\n")
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
 
-def _read_run_history(limit: int = 50) -> List[Dict[str, Any]]:
-    if not RUN_LOG_PATH.exists():
+
+def resolve_threshold(config_path: str) -> float:
+    cfg = _try_load_yaml(config_path)
+    # Accept a few common shapes:
+    # threshold: 0.8
+    # godscore: { threshold: 0.8 }
+    # gv: { threshold: 0.8 }
+    candidates = [
+        cfg.get("threshold"),
+        (cfg.get("godscore") or {}).get("threshold") if isinstance(cfg.get("godscore"), dict) else None,
+        (cfg.get("gv") or {}).get("threshold") if isinstance(cfg.get("gv"), dict) else None,
+    ]
+    for c in candidates:
+        v = _coerce_float(c)
+        if v is not None:
+            return v
+    return DEFAULT_THRESHOLD
+
+
+def _read_jsonl(path: Path) -> List[Dict[str, Any]]:
+    if not path.exists():
         return []
-    rows: List[Dict[str, Any]] = []
-    with RUN_LOG_PATH.open("r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                rows.append(json.loads(line))
-            except Exception:
-                continue
-    return rows[-limit:]
+    out: List[Dict[str, Any]] = []
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    obj = json.loads(line)
+                    if isinstance(obj, dict):
+                        out.append(obj)
+                except Exception:
+                    continue
+    except Exception:
+        return []
+    return out
 
-def _avg(nums: List[float]) -> Optional[float]:
-    nums = [n for n in nums if isinstance(n, (int, float))]
-    if not nums:
+
+def _append_jsonl(path: Path, obj: Dict[str, Any]) -> None:
+    try:
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(obj, ensure_ascii=False) + "\n")
+    except Exception:
+        # Do not crash the gate on logging failure; still print warning
+        print("⚠️  Warning: could not write run history log.")
+
+
+def _compute_baseline(history: List[Dict[str, Any]], window: int, mode_filter: Optional[str] = None) -> Optional[float]:
+    """
+    Baseline = average score of last N entries that:
+      - have a numeric 'score'
+      - have 'threshold_pass' == True (so we compare against successful behavior)
+      - optionally match mode_filter ("free" or "pro")
+    """
+    scores: List[float] = []
+    for item in reversed(history):
+        if len(scores) >= window:
+            break
+        if mode_filter and str(item.get("mode", "")).lower() != mode_filter.lower():
+            continue
+
+        if item.get("threshold_pass") is not True:
+            continue
+
+        s = _coerce_float(item.get("score"))
+        if s is None:
+            continue
+        scores.append(s)
+
+    if not scores:
         return None
-    return sum(nums) / len(nums)
+    return sum(scores) / len(scores)
 
-def write_step_summary(score: float, threshold: float, passed: bool, extra_lines: List[str] | None = None) -> None:
+
+def _write_step_summary(score: float, threshold: float, threshold_pass: bool,
+                        mode: str,
+                        baseline: Optional[float],
+                        max_regression: float,
+                        regression_delta: Optional[float],
+                        regression_pass: Optional[bool]) -> None:
     summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
     if not summary_path:
         return
-    status = "✅ PASS" if passed else "❌ FAIL"
-    delta = score - threshold
-    with open(summary_path, "a", encoding="utf-8") as f:
-        f.write("## GodScore CI Summary\n\n")
-        f.write(f"- **Score:** `{score:.3f}`\n")
-        f.write(f"- **Threshold:** `{threshold:.3f}`\n")
-        f.write(f"- **Result:** **{status}**\n")
-        f.write(f"- **Delta:** `{delta:+.3f}`\n")
-        if extra_lines:
-            f.write("\n")
-            for line in extra_lines:
-                f.write(f"{line}\n")
+
+    status = "✅ PASS" if threshold_pass and (regression_pass is not False) else "❌ FAIL"
+    lines: List[str] = []
+    lines.append("## GodScore CI Summary")
+    lines.append("")
+    lines.append(f"- **Mode:** `{mode}`")
+    lines.append(f"- **Score:** `{score:.3f}`")
+    lines.append(f"- **Threshold:** `{threshold:.3f}`")
+    lines.append(f"- **Threshold result:** `{'PASS' if threshold_pass else 'FAIL'}`")
+
+    if baseline is not None:
+        lines.append(f"- **Baseline (avg last N):** `{baseline:.3f}`")
+        if regression_delta is not None:
+            lines.append(f"- **Regression delta:** `{regression_delta:+.3f}` (allowed drop: `{max_regression:.3f}`)")
+        if regression_pass is not None:
+            lines.append(f"- **Regression result:** `{'PASS' if regression_pass else 'FAIL'}`")
+    else:
+        lines.append("- **Baseline:** `N/A` (not enough history yet)")
+
+    lines.append(f"- **Overall:** `{status}`")
+    lines.append("")
+
+    try:
+        with open(summary_path, "a", encoding="utf-8") as f:
+            f.write("\n".join(lines) + "\n")
+    except Exception:
+        pass
+
 
 # ----------------------------
-# Core gate logic
+# Gate logic
 # ----------------------------
-def resolve_threshold(cli_threshold: Optional[float], config_path: str) -> float:
-    if cli_threshold is not None:
-        return float(cli_threshold)
 
-    cfg = _try_load_yaml(config_path)
-    # supports: threshold: 0.80 OR gv: { threshold: 0.80 }
-    t = None
-    if "threshold" in cfg:
-        t = _coerce_float(cfg.get("threshold"))
-    elif isinstance(cfg.get("gv"), dict):
-        t = _coerce_float(cfg["gv"].get("threshold"))
+def enforce_threshold(score: float, threshold: float) -> None:
+    if score < threshold:
+        print(f"❌ Gv score {score:.3f} is below threshold {threshold:.3f}.")
+        raise SystemExit(EXIT_THRESHOLD_FAIL)
+    print(f"✅ Threshold OK: {score:.3f} ≥ {threshold:.3f}")
 
-    return float(t) if t is not None else DEFAULT_THRESHOLD
 
-def enforce_gate(score: float, threshold: float) -> bool:
-    return score >= threshold
-
-def pro_regression_check(score: float, history_window: int, max_regression: float) -> Optional[str]:
+def regression_check(score: float, baseline: float, max_regression: float) -> Tuple[bool, float]:
     """
-    Compare current score to average of recent scores.
-    If score is more than max_regression below baseline avg, flag it.
+    Regression condition:
+      fail if score < baseline - max_regression
+    Returns (pass, delta) where delta = score - baseline
     """
-    history = _read_run_history(limit=200)
-    recent_scores: List[float] = []
-    for r in reversed(history):
-        s = r.get("score")
-        if isinstance(s, (int, float)):
-            recent_scores.append(float(s))
-        if len(recent_scores) >= history_window:
-            break
+    delta = score - baseline
+    ok = score >= (baseline - max_regression)
+    return ok, delta
 
-    baseline = _avg(recent_scores) if recent_scores else None
+
+def main(argv: Optional[List[str]] = None) -> int:
+    parser = argparse.ArgumentParser(description="GodScore CI gate (threshold + optional regression check).")
+
+    parser.add_argument("--score", type=float, default=None, help="Gv score for this run.")
+    parser.add_argument("--threshold", type=float, default=None, help="Override threshold. If omitted, read config.")
+    parser.add_argument("--config", type=str, default=DEFAULT_CONFIG_PATH, help="Config file path (YAML).")
+
+    parser.add_argument("--mode", type=str, default=DEFAULT_MODE, choices=["free", "pro"], help="Run mode.")
+    parser.add_argument("--token", type=str, default=None, help="Pro token (optional). If mode=pro, required unless env GV_PRO_TOKEN set.")
+
+    parser.add_argument("--history-window", type=int, default=DEFAULT_HISTORY_WINDOW, help="Number of recent successful runs for baseline.")
+    parser.add_argument("--max-regression", type=float, default=DEFAULT_MAX_REGRESSION, help="Allowed drop vs baseline average.")
+    parser.add_argument("--run-log", type=str, default=str(DEFAULT_RUN_LOG), help="Path to JSONL run history log.")
+
+    args = parser.parse_args(argv)
+
+    # Resolve score
+    score = args.score
+    if score is None:
+        score = _coerce_float(os.getenv("GV_SCORE"))
+    if score is None:
+        print("❌ Missing Gv score. Provide --score or set GV_SCORE.")
+        return EXIT_BAD_INPUT
+
+    # Resolve threshold
+    threshold = args.threshold if args.threshold is not None else resolve_threshold(args.config)
+
+    mode = (args.mode or "free").lower().strip()
+    history_window = max(1, int(args.history_window))
+    max_regression = float(args.max_regression)
+    run_log = Path(args.run_log)
+
+    # If PRO mode, require token
+    pro_token = args.token or os.getenv("GV_PRO_TOKEN")
+    if mode == "pro" and not pro_token:
+        print("❌ PRO mode requires a token. Provide --token or set env GV_PRO_TOKEN.")
+        return EXIT_PRO_TOKEN_MISSING
+
+    # Load history for baseline
+    history = _read_jsonl(run_log)
+    baseline = _compute_baseline(history, window=history_window)
+
+    threshold_pass = True
+    regression_pass: Optional[bool] = None
+    regression_delta: Optional[float] = None
+
+    # ---- Threshold gate (always enforced) ----
+    try:
+        enforce_threshold(score, threshold)
+    except SystemExit as e:
+        threshold_pass = False
+        # Still log & summarize below, then exit with threshold code.
+        exit_code = int(getattr(e, "code", EXIT_THRESHOLD_FAIL))
+        _finalize(run_log, mode, score, threshold, threshold_pass,
+                  baseline, max_regression, regression_pass, regression_delta,
+                  exit_code)
+        return exit_code
+
+    # ---- Regression check (free: warn; pro: fail) ----
     if baseline is None:
-        return None
+        print(f"ℹ️  Regression: not enough history yet (need up to {history_window} successful prior runs). Skipping.")
+    else:
+        ok, delta = regression_check(score, baseline, max_regression)
+        regression_pass = ok
+        regression_delta = delta
 
-    drop = baseline - score
-    if drop > max_regression:
-        return f"🚨 **PRO regression:** current `{score:.3f}` vs baseline `{baseline:.3f}` (drop `{drop:.3f}` > allowed `{max_regression:.3f}`)"
-    return None
+        if ok:
+            print(f"✅ Regression OK: score {score:.3f} vs baseline {baseline:.3f} (delta {delta:+.3f})")
+        else:
+            msg = (
+                f"⚠️  Regression detected: score {score:.3f} vs baseline {baseline:.3f} "
+                f"(delta {delta:+.3f}, allowed drop {max_regression:.3f})"
+            )
+            if mode == "free":
+                # FREE: warn only
+                print(msg)
+                print("ℹ️  FREE mode: regression is a warning (does not fail CI).")
+            else:
+                # PRO: hard fail
+                print("❌ " + msg.replace("⚠️  ", ""))
+                _finalize(run_log, mode, score, threshold, threshold_pass,
+                          baseline, max_regression, regression_pass, regression_delta,
+                          EXIT_REGRESSION_FAIL)
+                return EXIT_REGRESSION_FAIL
 
-def require_pro_token(mode: str, token: Optional[str]) -> Optional[str]:
-    """
-    Require token for pro mode. Token can be passed or via env GV_PRO_TOKEN.
-    """
-    if mode != "pro":
-        return None
-    effective = token or os.getenv("GV_PRO_TOKEN")
-    if not effective:
-        return "❌ PRO mode requires a token. Provide `--token ...` or set env `GV_PRO_TOKEN`."
-    return None
+    _finalize(run_log, mode, score, threshold, threshold_pass,
+              baseline, max_regression, regression_pass, regression_delta,
+              EXIT_OK)
+    return EXIT_OK
 
-# ----------------------------
-# CLI
-# ----------------------------
-def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(description="GodScore CI gate (Gv).")
-    p.add_argument("--score", type=float, required=True, help="Current Gv score for this run.")
-    p.add_argument("--threshold", type=float, default=None, help="Minimum allowed Gv score.")
-    p.add_argument("--config", type=str, default=DEFAULT_CONFIG_PATH, help="Path to config YAML.")
-    p.add_argument("--mode", type=str, default=DEFAULT_MODE, choices=["free", "pro"], help="free | pro")
-    p.add_argument("--token", type=str, default=None, help="PRO token (or set env GV_PRO_TOKEN).")
 
-    # pro-only knobs (still safe defaults)
-    p.add_argument("--history-window", type=int, default=DEFAULT_HISTORY_WINDOW, help="PRO: baseline window size.")
-    p.add_argument("--max-regression", type=float, default=DEFAULT_MAX_REGRESSION, help="PRO: allowed drop vs baseline avg.")
-    return p
-
-def main() -> int:
-    args = build_parser().parse_args()
-
-    score = float(args.score)
-
-    # PRO lock
-    token_err = require_pro_token(args.mode, args.token)
-    if token_err:
-        print(token_err)
-        _append_run_log({"score": score, "threshold": None, "passed": False, "mode": args.mode, "reason": "missing_pro_token"})
-        write_step_summary(score, threshold=0.0, passed=False, extra_lines=[token_err])
-        return 3
-
-    threshold = resolve_threshold(args.threshold, args.config)
-    passed = enforce_gate(score, threshold)
-
-    extra: List[str] = []
-    reason = "ok"
-
-    # PRO regression check
-    if args.mode == "pro":
-        msg = pro_regression_check(score, int(args.history_window), float(args.max_regression))
-        if msg:
-            extra.append(msg)
-            passed = False
-            reason = "pro_regression"
-
-    _append_run_log(
-        {
-            "score": score,
-            "threshold": threshold,
-            "passed": passed,
-            "mode": args.mode,
-            "history_window": int(args.history_window),
-            "max_regression": float(args.max_regression),
-            "reason": reason,
-        }
+def _finalize(run_log: Path,
+              mode: str,
+              score: float,
+              threshold: float,
+              threshold_pass: bool,
+              baseline: Optional[float],
+              max_regression: float,
+              regression_pass: Optional[bool],
+              regression_delta: Optional[float],
+              exit_code: int) -> None:
+    # Write GH step summary (if available)
+    _write_step_summary(
+        score=score,
+        threshold=threshold,
+        threshold_pass=threshold_pass,
+        mode=mode,
+        baseline=baseline,
+        max_regression=max_regression,
+        regression_delta=regression_delta,
+        regression_pass=regression_pass,
     )
 
-    write_step_summary(score, threshold, passed, extra_lines=extra if extra else None)
+    # Append run history
+    record: Dict[str, Any] = {
+        "ts": _now_iso(),
+        "mode": mode,
+        "score": round(float(score), 6),
+        "threshold": round(float(threshold), 6),
+        "threshold_pass": bool(threshold_pass),
+        "baseline": None if baseline is None else round(float(baseline), 6),
+        "max_regression": round(float(max_regression), 6),
+        "regression_pass": regression_pass,
+        "regression_delta": None if regression_delta is None else round(float(regression_delta), 6),
+        "exit_code": int(exit_code),
+        "sha": os.getenv("GITHUB_SHA"),
+        "repo": os.getenv("GITHUB_REPOSITORY"),
+        "run_id": os.getenv("GITHUB_RUN_ID"),
+    }
+    _append_jsonl(run_log, record)
 
-    if passed:
-        print(f"✅ PASS: score {score:.3f} >= threshold {threshold:.3f}")
-        return 0
-
-    print(f"❌ FAIL: score {score:.3f} < threshold {threshold:.3f}" if reason == "ok" else "❌ FAIL: PRO regression check failed")
-    for line in extra:
-        print(line)
-    return 2
 
 if __name__ == "__main__":
     raise SystemExit(main())
