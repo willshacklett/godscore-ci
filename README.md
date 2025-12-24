@@ -1,7 +1,11 @@
-# GodScore CI  
+# GodScore CI
+
+**GodScore CI prevents long-term system degradation by enforcing survivability and regression gates in continuous integration.**
+
 **Survivability-Aware Continuous Integration Gate**
 
-GodScore CI is a GitHub Action that adds a new kind of CI gate:  
+GodScore CI is a GitHub Action that adds a new kind of CI gate:
+
 **long-term system survivability**.
 
 Traditional CI answers:
