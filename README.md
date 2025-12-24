@@ -52,3 +52,28 @@ Pro mode is designed for policy enforcement in production CI.
 Pro mode answers:
 > “Should this change be allowed to ship?”
 
+---
+
+## 📉 Survivability Regression Policy
+
+GodScore CI does not only evaluate absolute survivability — it also detects **negative trends over time**.
+
+A regression occurs when the current God Variable (Gv) score drops significantly below recent historical performance.
+
+### Regression Handling by Mode
+
+| Mode | Regression Detected | CI Result |
+|-----|--------------------|-----------|
+| Free | Yes | ⚠️ Warning only |
+| Pro | Yes | ❌ Build fails |
+
+This design allows teams to *see* survivability decay early, while reserving enforcement for production pipelines.
+
+---
+
+### Example: Free Mode (Warn Only)
+
+```yaml
+- uses: willshacklett/godscore-ci@v1
+  with:
+    score: 0.81
