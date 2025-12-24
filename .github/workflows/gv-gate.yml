@@ -22,6 +22,8 @@ jobs:
           pip install pyyaml
 
       - name: Run GodScore Gate (PRO)
+        env:
+          GV_PRO_TOKEN: ${{ secrets.GV_PRO_TOKEN }}
         run: |
           python gv_gate.py \
             --score 0.82 \
