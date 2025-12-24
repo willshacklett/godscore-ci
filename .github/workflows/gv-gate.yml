@@ -17,5 +17,9 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Install dependencies
+        run: pip install pyyaml
+
       - name: Run Gv gate
-        run: python gv_gate.py
+        run: python gv_gate.py --score 0.82
+
