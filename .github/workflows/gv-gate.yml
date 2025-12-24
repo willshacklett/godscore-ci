@@ -22,7 +22,7 @@ jobs:
           pip install pyyaml
 
       # ----------------------------
-      # FREE TIER (always runs)
+      # FREE MODE (always runs)
       # ----------------------------
       - name: Run GodScore Gate (FREE)
         run: |
@@ -31,7 +31,7 @@ jobs:
             --mode free
 
       # ----------------------------
-      # PRO TIER (only if token exists)
+      # PRO MODE (only if token exists)
       # ----------------------------
       - name: Run GodScore Gate (PRO)
         if: secrets.GV_PRO_TOKEN != ''
