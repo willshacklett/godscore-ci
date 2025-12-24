@@ -1,11 +1,8 @@
 # GodScore CI
 
-**GodScore CI prevents long-term system degradation by enforcing survivability and regression gates in continuous integration.**
-
 **Survivability-Aware Continuous Integration Gate**
 
-GodScore CI is a GitHub Action that adds a new kind of CI gate:
-
+GodScore CI is a GitHub Action that introduces a new class of CI gate:
 **long-term system survivability**.
 
 Traditional CI answers:
@@ -14,70 +11,95 @@ Traditional CI answers:
 - Is performance acceptable?
 
 GodScore CI asks a harder question:
+
 > **Does this change reduce the system’s ability to survive, self-correct, or recover over time?**
 
-If survivability drops below policy, the build fails.
+If survivability drops below policy, the gate reacts.
 
 ---
 
-## 🚦 What GodScore CI Enforces
+## What GodScore CI Enforces
 
-GodScore CI evaluates a single scalar metric — the **God Variable (Gv)** — representing survivability, corrigibility, and irreversibility risk.
+GodScore CI evaluates a single scalar metric — the **God Variable (Gv)** — representing:
 
-The gate fails if:
+- Survivability
+- Correctability
+- Irreversibility risk
+
+The gate evaluates:
+- **Absolute survivability thresholds**
+- **Negative survivability trends (regression over time)**
+
+This prevents slow, silent degradation that traditional CI cannot detect.
 
 ---
 
-## 🔓 Free vs 🔒 Pro Modes
+## Free vs Pro Modes
 
 GodScore CI supports two execution modes designed to balance accessibility with enforcement.
 
-### Free Mode (Default)
-Free mode is designed for visibility and experimentation.
+### 🆓 Free Mode (Default)
 
-- Evaluates the God Variable (Gv) score
-- Records survivability history (`gv_runs.json`)
+- No token required
 - Detects survivability regression
-- **Emits warnings only** on regression
-- CI **does not fail** on regression alone
+- Emits warnings only
+- CI continues
 
 Free mode answers:
-> “Is survivability trending in the wrong direction?”
+> *“Is survivability getting worse?”*
 
-### Pro Mode (Enforcement)
-Pro mode is designed for policy enforcement in production CI.
-
-- Requires a valid `GV_PRO_TOKEN`
-- Enforces survivability thresholds
-- Enforces **regression limits**
-- **Fails CI** on survivability regression beyond policy
-- Prevents silent long-term degradation
-
-Pro mode answers:
-> “Should this change be allowed to ship?”
+It is ideal for:
+- Early visibility
+- Experimentation
+- Research and development
 
 ---
 
-## 📉 Survivability Regression Policy
+### 🔒 Pro Mode (Enforced)
+
+- Requires a Pro token
+- Detects survivability regression
+- **Fails CI when regression exceeds policy**
+
+Pro mode answers:
+> *“Should this change be allowed to ship?”*
+
+It is intended for:
+- Production pipelines
+- Release enforcement
+- High-risk systems
+
+---
+
+## Survivability Regression Policy
 
 GodScore CI does not only evaluate absolute survivability — it also detects **negative trends over time**.
 
-A regression occurs when the current God Variable (Gv) score drops significantly below recent historical performance.
+A regression occurs when the current Gv score drops significantly below recent historical performance.
 
 ### Regression Handling by Mode
 
 | Mode | Regression Detected | CI Result |
-|-----|--------------------|-----------|
+|-----|--------------------|----------|
 | Free | Yes | ⚠️ Warning only |
-| Pro | Yes | ❌ Build fails |
+| Pro  | Yes | ❌ Build fails |
 
-This design allows teams to *see* survivability decay early, while reserving enforcement for production pipelines.
+This design allows teams to see survivability decay early, while reserving enforcement for production pipelines.
 
 ---
 
-### Example: Free Mode (Warn Only)
+## Usage Examples
+
+### Free Mode (Warn Only)
 
 ```yaml
 - uses: willshacklett/godscore-ci@v1
   with:
     score: 0.81
+    mode: free
+
+- uses: willshacklett/godscore-ci@v1
+  with:
+    score: 0.81
+    mode: pro
+    pro_token: ${{ secrets.GV_PRO_TOKEN }}
