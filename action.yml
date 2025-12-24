@@ -2,6 +2,10 @@ name: "GodScore CI"
 description: "Survivability-aware CI gate enforcing God Variable (Gv) thresholds"
 author: "William Shacklett"
 
+branding:
+  icon: shield
+  color: blue
+
 inputs:
   score:
     description: "God Variable score to evaluate"
