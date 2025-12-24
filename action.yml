@@ -1,3 +1,5 @@
+# GitHub Marketplace entry point
+
 name: "GodScore CI"
 description: "Survivability-aware CI gate enforcing God Variable (Gv) thresholds"
 author: "William Shacklett"
