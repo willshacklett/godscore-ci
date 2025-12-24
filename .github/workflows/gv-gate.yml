@@ -1,31 +1,413 @@
-name: God Variable Gate
+import argparse
+import os
+import sys
+import json
+from typing import Any, Dict, Optional, List
+from datetime import datetime
+from pathlib import Path
 
-on:
-  push:
-  pull_request:
+# -----------------------------
+# Defaults
+# -----------------------------
+DEFAULT_THRESHOLD = 0.80
+DEFAULT_CONFIG_PATH = ".godscore.yml"
+DEFAULT_MODE = "free"  # free | pro
+DEFAULT_HISTORY_WINDOW = 5
+DEFAULT_MAX_REGRESSION = 0.02  # Allowed drop vs recent baseline (average)
 
-jobs:
-  gv-gate:
-    runs-on: ubuntu-latest
+RUN_LOG_PATH = Path("gv_runs.jsonl")
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
+# -----------------------------
+# Helpers
+# -----------------------------
+def _coerce_float(x: Any) -> Optional[float]:
+    try:
+        return float(x)
+    except Exception:
+        return None
 
-      - name: Install dependencies
-        run: pip install pyyaml
 
-      - name: Run Gv gate
-        run: python gv_gate.py --score 0.82
+def _coerce_int(x: Any) -> Optional[int]:
+    try:
+        return int(x)
+    except Exception:
+        return None
 
-      - name: Upload Gv run history
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: gv-run-history
-          path: gv_runs.jsonl
+
+def _try_load_yaml(path: str) -> Dict[str, Any]:
+    """
+    Optional YAML config loader.
+    If PyYAML isn't installed or file doesn't exist, returns {}.
+    """
+    if not os.path.exists(path):
+        return {}
+    try:
+        import yaml  # type: ignore
+    except Exception:
+        return {}
+
+    with open(path, "r", encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+    if not isinstance(data, dict):
+        return {}
+    return data
+
+
+def _read_jsonl_scores(path: Path, limit: int) -> List[float]:
+    """
+    Read up to last `limit` scores from a JSONL file.
+    Returns list in chronological order (oldest -> newest) for the slice.
+    """
+    if limit <= 0:
+        return []
+
+    if not path.exists():
+        return []
+
+    scores: List[float] = []
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    obj = json.loads(line)
+                except Exception:
+                    continue
+                if isinstance(obj, dict) and "score" in obj:
+                    s = _coerce_float(obj.get("score"))
+                    if s is not None:
+                        scores.append(s)
+    except Exception:
+        return []
+
+    if len(scores) <= limit:
+        return scores
+    return scores[-limit:]
+
+
+def _write_run_log(
+    score: float,
+    threshold: float,
+    passed: bool,
+    mode: str,
+    baseline: Optional[float],
+    regression: Optional[float],
+    window: int,
+    max_regression: float,
+    log_path: Path,
+) -> None:
+    record = {
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "score": score,
+        "threshold": threshold,
+        "passed": passed,
+        "mode": mode,
+        "baseline": baseline,
+        "regression": regression,
+        "history_window": window,
+        "max_regression": max_regression,
+    }
+    with log_path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(record) + "\n")
+
+
+def _write_step_summary(
+    score: float,
+    threshold: float,
+    passed: bool,
+    mode: str,
+    baseline: Optional[float],
+    regression: Optional[float],
+    window: int,
+    max_regression: float,
+) -> None:
+    summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not summary_path:
+        return
+
+    status = "✅ PASS" if passed else "❌ FAIL"
+    delta = score - threshold
+
+    with open(summary_path, "a", encoding="utf-8") as f:
+        f.write("## GodScore CI Summary\n\n")
+        f.write(f"- **Mode:** `{mode}`\n")
+        f.write(f"- **Score:** `{score:.3f}`\n")
+        f.write(f"- **Threshold:** `{threshold:.3f}`\n")
+        f.write(f"- **Threshold Delta:** `{delta:+.3f}`\n")
+
+        if mode == "pro":
+            if baseline is None:
+                f.write(f"- **Regression Baseline:** `N/A` (no prior runs)\n")
+            else:
+                f.write(f"- **Regression Baseline (avg last {window}):** `{baseline:.3f}`\n")
+                f.write(f"- **Regression (baseline - score):** `{regression:+.3f}`\n")
+                f.write(f"- **Max Allowed Regression:** `{max_regression:.3f}`\n")
+
+        f.write(f"\n**Result:** {status}\n\n")
+        if not passed:
+            if mode == "pro" and baseline is not None and regression is not None and regression > max_regression:
+                f.write("⚠️ **Regression detected in PRO mode.**\n")
+            elif score < threshold:
+                f.write("⚠️ **Score below threshold.**\n")
+
+
+def _resolve_threshold(args: argparse.Namespace, cfg: Dict[str, Any]) -> float:
+    if args.threshold is not None:
+        return float(args.threshold)
+
+    env_t = _coerce_float(os.getenv("GV_THRESHOLD"))
+    if env_t is not None:
+        return env_t
+
+    # YAML supports either top-level threshold or gv.threshold
+    if "threshold" in cfg:
+        t = _coerce_float(cfg.get("threshold"))
+        if t is not None:
+            return t
+    gv = cfg.get("gv")
+    if isinstance(gv, dict) and "threshold" in gv:
+        t = _coerce_float(gv.get("threshold"))
+        if t is not None:
+            return t
+
+    return DEFAULT_THRESHOLD
+
+
+def _resolve_mode(args: argparse.Namespace, cfg: Dict[str, Any]) -> str:
+    if args.mode:
+        return args.mode.strip().lower()
+
+    env_m = os.getenv("GV_MODE")
+    if env_m:
+        return env_m.strip().lower()
+
+    if "mode" in cfg and isinstance(cfg.get("mode"), str):
+        return str(cfg.get("mode")).strip().lower()
+
+    gv = cfg.get("gv")
+    if isinstance(gv, dict) and isinstance(gv.get("mode"), str):
+        return str(gv.get("mode")).strip().lower()
+
+    return DEFAULT_MODE
+
+
+def _resolve_history_window(args: argparse.Namespace, cfg: Dict[str, Any]) -> int:
+    if args.history_window is not None:
+        return max(0, int(args.history_window))
+
+    env_n = _coerce_int(os.getenv("GV_HISTORY_WINDOW"))
+    if env_n is not None:
+        return max(0, env_n)
+
+    pro = cfg.get("pro")
+    if isinstance(pro, dict) and "history_window" in pro:
+        n = _coerce_int(pro.get("history_window"))
+        if n is not None:
+            return max(0, n)
+
+    return DEFAULT_HISTORY_WINDOW
+
+
+def _resolve_max_regression(args: argparse.Namespace, cfg: Dict[str, Any]) -> float:
+    if args.max_regression is not None:
+        return float(args.max_regression)
+
+    env_r = _coerce_float(os.getenv("GV_MAX_REGRESSION"))
+    if env_r is not None:
+        return env_r
+
+    pro = cfg.get("pro")
+    if isinstance(pro, dict) and "max_regression" in pro:
+        r = _coerce_float(pro.get("max_regression"))
+        if r is not None:
+            return r
+
+    return DEFAULT_MAX_REGRESSION
+
+
+def _resolve_score(args: argparse.Namespace) -> Optional[float]:
+    if args.score is not None:
+        return float(args.score)
+
+    env_s = _coerce_float(os.getenv("GV_SCORE"))
+    if env_s is not None:
+        return env_s
+
+    return None
+
+
+# -----------------------------
+# Gate logic
+# -----------------------------
+def evaluate_gate(
+    score: float,
+    threshold: float,
+    mode: str,
+    history_window: int,
+    max_regression: float,
+    log_path: Path,
+) -> Dict[str, Any]:
+    """
+    Returns:
+      passed: bool
+      baseline: Optional[float]
+      regression: Optional[float]
+      reason: str
+    """
+    # Always enforce threshold
+    if score < threshold:
+        return {
+            "passed": False,
+            "baseline": None,
+            "regression": None,
+            "reason": "score_below_threshold",
+        }
+
+    mode = (mode or "free").strip().lower()
+    if mode not in ("free", "pro"):
+        mode = "free"
+
+    # FREE: threshold only
+    if mode == "free":
+        return {
+            "passed": True,
+            "baseline": None,
+            "regression": None,
+            "reason": "free_threshold_pass",
+        }
+
+    # PRO: threshold + regression check against recent baseline
+    recent = _read_jsonl_scores(log_path, history_window)
+    if not recent:
+        # No prior runs -> allow pass, but baseline not available
+        return {
+            "passed": True,
+            "baseline": None,
+            "regression": None,
+            "reason": "pro_no_history_yet",
+        }
+
+    baseline = sum(recent) / len(recent)
+    regression = baseline - score  # positive means score dropped vs baseline
+
+    if regression > max_regression:
+        return {
+            "passed": False,
+            "baseline": baseline,
+            "regression": regression,
+            "reason": "pro_regression_exceeded",
+        }
+
+    return {
+        "passed": True,
+        "baseline": baseline,
+        "regression": regression,
+        "reason": "pro_pass",
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="GodScore CI gate (Gv threshold + optional PRO regression checks).")
+
+    parser.add_argument("--score", type=float, default=None, help="Current Gv score for this run.")
+    parser.add_argument("--threshold", type=float, default=None, help="Minimum acceptable Gv threshold.")
+    parser.add_argument("--config", type=str, default=DEFAULT_CONFIG_PATH, help="Path to YAML config file.")
+    parser.add_argument("--mode", type=str, default=None, help="free|pro (PRO adds regression check).")
+
+    # PRO knobs
+    parser.add_argument("--history-window", type=int, default=None, help="PRO: number of prior runs to baseline against.")
+    parser.add_argument("--max-regression", type=float, default=None, help="PRO: allowed drop vs baseline (avg last N).")
+
+    # Logging
+    parser.add_argument("--log-path", type=str, default=str(RUN_LOG_PATH), help="Path to JSONL run history log.")
+
+    args = parser.parse_args()
+
+    cfg = _try_load_yaml(args.config)
+    score = _resolve_score(args)
+    if score is None:
+        print("❌ Missing Gv score. Provide --score or set GV_SCORE.")
+        return 2
+
+    threshold = _resolve_threshold(args, cfg)
+    mode = _resolve_mode(args, cfg)
+    history_window = _resolve_history_window(args, cfg)
+    max_regression = _resolve_max_regression(args, cfg)
+    log_path = Path(args.log_path)
+
+    result = evaluate_gate(
+        score=score,
+        threshold=threshold,
+        mode=mode,
+        history_window=history_window,
+        max_regression=max_regression,
+        log_path=log_path,
+    )
+
+    passed = bool(result["passed"])
+    baseline = result.get("baseline")
+    regression = result.get("regression")
+
+    # Always log the run (even on failure) so your artifact history stays continuous.
+    _write_run_log(
+        score=score,
+        threshold=threshold,
+        passed=passed,
+        mode=(mode or "free").strip().lower(),
+        baseline=baseline,
+        regression=regression,
+        window=history_window,
+        max_regression=max_regression,
+        log_path=log_path,
+    )
+
+    # Optional GitHub Actions step summary
+    _write_step_summary(
+        score=score,
+        threshold=threshold,
+        passed=passed,
+        mode=(mode or "free").strip().lower(),
+        baseline=baseline,
+        regression=regression,
+        window=history_window,
+        max_regression=max_regression,
+    )
+
+    # Console output
+    mode_norm = (mode or "free").strip().lower()
+    if passed:
+        if mode_norm == "pro":
+            if baseline is None:
+                print(f"✅ PASS (PRO): score={score:.3f} >= threshold={threshold:.3f} (no prior history yet)")
+            else:
+                print(
+                    f"✅ PASS (PRO): score={score:.3f} >= threshold={threshold:.3f}, "
+                    f"baseline(avg last {history_window})={baseline:.3f}, regression={float(regression):+.3f} "
+                    f"(max {max_regression:.3f})"
+                )
+        else:
+            print(f"✅ PASS (FREE): score={score:.3f} >= threshold={threshold:.3f}")
+        return 0
+
+    # Failure cases
+    if score < threshold:
+        print(f"❌ FAIL: score={score:.3f} < threshold={threshold:.3f}")
+    else:
+        # Regression fail
+        if baseline is None or regression is None:
+            print("❌ FAIL (PRO): regression rule failed (unexpected missing baseline/regression)")
+        else:
+            print(
+                f"❌ FAIL (PRO): regression exceeded. score={score:.3f}, "
+                f"baseline(avg last {history_window})={baseline:.3f}, regression={float(regression):+.3f} "
+                f"(max {max_regression:.3f})"
+            )
+    return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+
