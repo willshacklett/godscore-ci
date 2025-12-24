@@ -20,6 +20,10 @@ inputs:
     required: false
     default: "free"
 
+      pro_token:
+    description: "Pro token (optional). Pass secrets.GV_PRO_TOKEN here to enable pro enforcement."
+    required: false
+
 outputs:
   passed:
     description: "Whether the Gv gate passed"
@@ -36,9 +40,12 @@ runs:
       run: pip install pyyaml
       shell: bash
 
-    - name: Run GodScore gate
-      run: |
-        python gv_gate.py \
-          --score "${{ inputs.score }}" \
-          --threshold "${{ inputs.threshold }}"
-      shell: bash
+- name: Run GodScore Gate
+  env:
+    GV_PRO_TOKEN: ${{ inputs.pro_token }}
+  run: |
+    python gv_gate.py \
+      --score "${{ inputs.score }}" \
+      --threshold "${{ inputs.threshold }}" \
+      --mode "${{ inputs.mode }}"
+
