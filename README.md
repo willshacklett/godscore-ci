@@ -1,3 +1,17 @@
+> **GitHub Action**
+>
+> Enforce survivability thresholds in CI.
+>
+> ```yaml
+> - uses: willshacklett/godscore-ci@v1
+>   with:
+>     score: 0.82
+>     threshold: 0.80
+> ```
+>
+> If survivability falls below policy, the build fails.
+
+
 # GodScore CI
 **Survivability-Aware Continuous Integration (CI)**
 
