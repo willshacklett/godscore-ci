@@ -1,73 +1,43 @@
 # GodScore CI
+**Survivability-Aware Continuous Integration (CI)**
 
-**GodScore CI** is an experimental continuous integration (CI) framework that extends traditional software testing beyond correctness and performance.
+GodScore CI is a GitHub Action + CI gate that enforces a survivability threshold during builds.
 
-It introduces an additional evaluative dimension — the **God Variable (Gv)** — designed to penalize behaviors that undermine long-term system survivability, corrigibility, and ethical coherence.
+Most CI systems answer:
+- “Does it compile?”
+- “Do tests pass?”
+- “Is performance acceptable?”
 
----
+GodScore CI adds a different gate:
 
-## Why GodScore CI Exists
+> “Does this change reduce long-term survivability?”
 
-Modern CI pipelines answer questions like:
-- Does the code run?
-- Is it fast?
-- Does it pass tests?
-
-GodScore CI asks deeper questions:
-- Does this system suppress its own ability to be corrected?
-- Does optimization create irreversible harm?
-- Does short-term success compromise long-term survivability?
-
-If the answer is yes, the **God Variable score decreases**.
+If survivability falls below a policy threshold, the build fails.
 
 ---
 
-## The God Variable (Gv)
+## Why this exists
 
-The God Variable is **not a moral authority** and **not a claim of truth**.
+Traditional CI is great at correctness and speed, but it does not reliably catch:
+- irreversible optimization paths
+- long-term risk accumulation
+- short-term gains that reduce system survivability
 
-It is a **filter**:
-- Penalizes irreversible actions
-- Penalizes suppression of error correction
-- Penalizes unfalsifiable moral certainty
-- Rewards openness, reversibility, and long-term coherence
-
-The goal is not to define “good” —  
-the goal is to **preserve the conditions under which correction remains possible indefinitely**.
-
----
-
-## What This Repository Contains
-
-- A minimal, test-driven baseline implementation of the God Variable
-- CI workflows that evaluate invariants, perturbations, and failure modes
-- Experimental extensions exploring learning, feedback, and survivability metrics
-
-This repository is intentionally explicit, modular, and auditable.
+GodScore CI introduces an **enforceable contract** upstream of deployment:
+- configurable policy threshold
+- deterministic enforcement
+- audit trail (per-run history)
 
 ---
 
-## What This Is Not
+## Quick Start (GitHub Actions)
 
-- ❌ A religious claim  
-- ❌ A political framework  
-- ❌ A final moral system  
+Add this to a workflow step:
 
-GodScore CI is an **engineering experiment**.
+```yaml
+- uses: willshacklett/godscore-ci@v1
+  with:
+    score: 0.82
+    threshold: 0.80
 
----
-
-## Status
-
-⚠️ This project is experimental and under active development.
-
-The framework is intended to evolve through testing, critique, and real-world use.
-
----
-
-## Authorship
-
-Created and maintained by **William Shacklett**.
-
-Concept, framework, and implementation are original works developed as part of the *God Variable* research project.
 
