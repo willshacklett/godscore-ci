@@ -1,0 +1,64 @@
+name: GodScore Report
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  godscore:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+
+      - name: Run GodScore
+        run: |
+          python -m godscore_ci.cli score . --outdir gv_out
+
+      - name: Upload reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: godscore-reports
+          path: |
+            gv_out/gv_report.json
+            gv_out/gv_report.md
+
+      - name: Comment Gv score on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = JSON.parse(fs.readFileSync('gv_out/gv_report.json', 'utf8'));
+            const gv = report.gv_score;
+
+            const body = [
+              '### 🧠 GodScore CI Report',
+              '',
+              `**Gv Score:** \`${gv}\``,
+              '',
+              gv < 0.30
+                ? '⚠️ Below survivability threshold.'
+                : '✅ Meets survivability threshold.',
+            ].join('\n');
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body
+            });

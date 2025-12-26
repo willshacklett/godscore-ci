@@ -1,15 +1,18 @@
-name: God Variable Gate
+name: GodScore CI Gate
 
 on:
-  push:
   pull_request:
+  push:
+    branches: ["**"]
+
+permissions:
+  contents: read
 
 jobs:
-  gv-gate:
+  gate:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up Python
@@ -17,37 +20,37 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install dependencies
+      - name: Install package
         run: |
-          pip install pyyaml
+          python -m pip install --upgrade pip
+          python -m pip install -e .
 
-      # ----------------------------
-      # FREE MODE (always runs)
-      # ----------------------------
-      - name: Run GodScore Gate (FREE)
+      - name: Run GodScore (generate report)
         run: |
-          python gv_gate.py \
-            --score 0.82 \
-            --mode free
+          python -m godscore_ci.cli score . --outdir gv_out
 
-      # ----------------------------
-      # PRO MODE (only if token exists)
-      # ----------------------------
-      - name: Run GodScore Gate (PRO)
-        if: secrets.GV_PRO_TOKEN != ''
+      - name: Enforce threshold
         env:
-          GV_PRO_TOKEN: ${{ secrets.GV_PRO_TOKEN }}
+          GV_MIN: "0.30"
         run: |
-          python gv_gate.py \
-            --score 0.82 \
-            --mode pro
+          python - <<'PY'
+          import json, os
+          p = "gv_out/gv_report.json"
+          with open(p, "r", encoding="utf-8") as f:
+            report = json.load(f)
+          gv = float(report.get("gv_score", 0.0))
+          gv_min = float(os.environ.get("GV_MIN", "0.0"))
+          print(f"Gv Score: {gv} (min required: {gv_min})")
+          if gv < gv_min:
+            raise SystemExit(f"FAIL: gv_score {gv} < {gv_min}")
+          print("PASS: threshold met")
+          PY
 
-      # ----------------------------
-      # Upload run history
-      # ----------------------------
-      - name: Upload Gv run history
+      - name: Upload reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: gv-run-history
-          path: gv_runs.jsonl
+          name: godscore-gate-reports
+          path: |
+            gv_out/gv_report.json
+            gv_out/gv_report.md

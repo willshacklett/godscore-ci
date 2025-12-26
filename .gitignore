@@ -1,0 +1,13 @@
+# GodScore outputs
+gv_out/
+
+# Python build artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+
+# Virtual envs
+.venv/
+.env/
