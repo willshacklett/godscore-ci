@@ -3,10 +3,12 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-# We’ll hook this into your existing scorer logic next.
-# For now, it prints a placeholder and proves the CLI plumbing works.
+from .core import score_project
+from .reporters import write_json, write_markdown
+
+
 def main() -> int:
-    parser = argparse.ArgumentParser(prog="godscore")
+    parser = argparse.ArgumentParser(prog="godscore", description="Compute GodScore (Gv) for a project folder.")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     score = sub.add_parser("score", help="Score a folder and emit reports.")
@@ -16,17 +18,16 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.cmd == "score":
+        report = score_project(args.path)
         outdir = Path(args.outdir)
-        outdir.mkdir(parents=True, exist_ok=True)
+        write_json(report, outdir / "gv_report.json")
+        write_markdown(report, outdir / "gv_report.md")
 
-        # placeholder report files (we’ll replace with real output next step)
-        (outdir / "gv_report.json").write_text('{\n  "gv_score": 0.5,\n  "note": "CLI wiring OK. Next: connect real scoring."\n}\n', encoding="utf-8")
-        (outdir / "gv_report.md").write_text("# GodScore CI Report\n\n**Gv Score:** `0.5`\n\nCLI wiring OK. Next: connect real scoring.\n", encoding="utf-8")
-
-        print("Gv Score: 0.5")
+        print(f"Gv Score: {report['gv_score']}")
         print(f"Wrote: {outdir / 'gv_report.json'}")
         print(f"Wrote: {outdir / 'gv_report.md'}")
         return 0
 
     return 2
+
 
