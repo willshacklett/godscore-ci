@@ -11,7 +11,6 @@ permissions:
 jobs:
   godscore:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,7 +27,7 @@ jobs:
 
       - name: Run GodScore
         run: |
-          godscore score . --outdir gv_out
+          python -m godscore_ci.cli score . --outdir gv_out
 
       - name: Upload reports
         uses: actions/upload-artifact@v4
