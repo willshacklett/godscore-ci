@@ -36,3 +36,29 @@ jobs:
           path: |
             gv_out/gv_report.json
             gv_out/gv_report.md
+
+      - name: Comment Gv score on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = JSON.parse(fs.readFileSync('gv_out/gv_report.json', 'utf8'));
+            const gv = report.gv_score;
+
+            const body = [
+              '### 🧠 GodScore CI Report',
+              '',
+              `**Gv Score:** \`${gv}\``,
+              '',
+              gv < 0.30
+                ? '⚠️ Below survivability threshold.'
+                : '✅ Meets survivability threshold.',
+            ].join('\n');
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body
+            });
