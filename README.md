@@ -1,106 +1,104 @@
 # GodScore CI
 
-**Survivability-Aware Continuous Integration Gate**
+**Survivability-Aware Continuous Integration**
 
-GodScore CI is a GitHub Action that introduces a new class of CI gate:
-**long-term system survivability**.
+GodScore CI is an experimental, open framework for evaluating **long-term system survivability** inside automated development pipelines.
 
-Traditional CI answers:
-- Does it compile?
+Traditional CI systems answer short-term questions:
+
+- Does the code compile?
 - Do tests pass?
-- Is performance acceptable?
+- Is performance acceptable right now?
 
-GodScore CI asks a harder question:
+GodScore CI asks a different question:
 
 > **Does this change reduce the system’s ability to survive, self-correct, or recover over time?**
 
-If survivability drops below policy, the gate reacts.
+---
+
+## What GodScore Measures
+
+GodScore CI evaluates a single scalar metric — the **God Variable (Gv)** — representing aggregate survivability signals such as:
+
+- **Auditability** – Can behavior be inspected and understood?
+- **Reversibility** – Can changes be undone or corrected?
+- **Irreversibility Risk** – Does this introduce permanent failure modes?
+- **Self-Correction Capacity** – Can the system adapt after error?
+
+These components are combined into a normalized score (`0.0 – 1.0`) that can be:
+- reported to humans
+- enforced by policy
+- tracked over time
+
+The metric is intentionally simple, inspectable, and extensible.
 
 ---
 
-## What GodScore CI Enforces
+## How It Works
 
-GodScore CI evaluates a single scalar metric — the **God Variable (Gv)** — representing:
+GodScore CI integrates directly into GitHub Actions:
 
-- Survivability
-- Correctability
-- Irreversibility risk
+1. A scoring engine evaluates the repository
+2. A machine-readable report (`gv_report.json`) is generated
+3. A human-readable report (`gv_report.md`) is produced
+4. CI gates may **enforce minimum survivability thresholds**
+5. Pull requests receive an automatic comment with the current Gv score
 
-The gate evaluates:
-- **Absolute survivability thresholds**
-- **Negative survivability trends (regression over time)**
-
-This prevents slow, silent degradation that traditional CI cannot detect.
-
----
-
-## Free vs Pro Modes
-
-GodScore CI supports two execution modes designed to balance accessibility with enforcement.
-
-### 🆓 Free Mode (Default)
-
-- No token required
-- Detects survivability regression
-- Emits warnings only
-- CI continues
-
-Free mode answers:
-> *“Is survivability getting worse?”*
-
-It is ideal for:
-- Early visibility
-- Experimentation
-- Research and development
+The result is a survivability signal that is:
+- automated
+- repeatable
+- visible at review time
+- enforceable without manual judgment
 
 ---
 
-### 🔒 Pro Mode (Enforced)
+## Why Survivability?
 
-- Requires a Pro token
-- Detects survivability regression
-- **Fails CI when regression exceeds policy**
+Many system failures are not caused by bugs — they are caused by:
+- irreversible design decisions
+- suppressed correction paths
+- brittle optimization
+- loss of auditability over time
 
-Pro mode answers:
-> *“Should this change be allowed to ship?”*
+GodScore CI does not attempt to define *correct behavior*.
+It attempts to preserve the conditions under which **correction remains possible**.
 
-It is intended for:
-- Production pipelines
-- Release enforcement
-- High-risk systems
-
----
-
-## Survivability Regression Policy
-
-GodScore CI does not only evaluate absolute survivability — it also detects **negative trends over time**.
-
-A regression occurs when the current Gv score drops significantly below recent historical performance.
-Free mode surfaces regressions early; Pro mode enforces them at the gate.
-
-### Regression Handling by Mode
-
-| Mode | Regression Detected | CI Result |
-|-----|--------------------|----------|
-| Free | Yes | ⚠️ Warning only |
-| Pro  | Yes | ❌ Build fails |
-
-This design allows teams to see survivability decay early, while reserving enforcement for production pipelines.
+This makes it applicable to:
+- complex software systems
+- safety-critical tooling
+- AI and autonomous systems
+- long-lived infrastructure
 
 ---
 
-## Usage Examples
+## Philosophy (Briefly)
 
-### Free Mode (Warn Only)
+GodScore CI is **not**:
+- a moral authority
+- an ideology
+- a claim about truth or intent
 
-```yaml
-- uses: willshacklett/godscore-ci@v1
-  with:
-    score: 0.81
-    mode: free
+It is a tooling framework that encodes one principle:
 
-- uses: willshacklett/godscore-ci@v1
-  with:
-    score: 0.81
-    mode: pro
-    pro_token: ${{ secrets.GV_PRO_TOKEN }}
+> **Systems that cannot correct themselves do not remain safe.**
+
+---
+
+## Status
+
+GodScore CI is **experimental**.
+
+- The current scoring model is a stable scaffold
+- Components are expected to evolve
+- Thresholds are policy decisions, not truths
+
+The project prioritizes clarity, auditability, and gradual refinement over rapid expansion.
+
+---
+
+## Usage
+
+### Run locally
+```bash
+python -m pip install -e .
+python -m godscore_ci.cli score . --outdir gv_out
