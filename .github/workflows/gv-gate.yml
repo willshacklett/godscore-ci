@@ -25,9 +25,13 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e .
 
-      - name: Run GodScore (generate report)
+      - name: Prepare output directory
+        run: mkdir -p gv_out
+
+      - name: Run GodScore
         run: |
           python -m godscore_ci.cli score . --outdir gv_out
+
 
       - name: Enforce threshold
         env:
