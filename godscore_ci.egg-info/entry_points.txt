@@ -1,2 +1,0 @@
-[console_scripts]
-godscore = godscore_ci.cli:main
