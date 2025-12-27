@@ -1,143 +1,119 @@
 # GodScore CI
 
-**Survivability-Aware Continuous Integration**
+**GodScore CI** is a constraint-based Continuous Integration (CI) framework designed to detect *irreversible or long-term degradations* in evolving systems—issues that traditional CI pipelines often miss.
 
-GodScore CI is an experimental, open framework for evaluating **long-term system survivability** inside automated development pipelines.
+Rather than asking “Does this change work right now?”, GodScore CI asks:
 
-Traditional CI systems answer short-term questions:
-
-- Does the code compile?
-- Do tests pass?
-- Is performance acceptable right now?
-
-GodScore CI asks a different, harder question:
-
-> **Does this change reduce the system’s ability to survive, self-correct, or recover over time?**
-
-If survivability drops below policy, the CI gate reacts.
-
----
-
-## Why This Exists
-
-Modern software systems — especially AI systems — increasingly operate autonomously, adapt over time, and influence real-world outcomes. Yet our tooling still optimizes almost exclusively for **immediate correctness and performance**.
-
-GodScore CI explores a missing layer in development infrastructure:
-
-- Detecting **irreversible changes**
-- Penalizing loss of **self-correction**
-- Favoring changes that preserve **long-term recoverability**
-- Making survivability measurable, auditable, and enforceable
-
-This project is not about declaring what systems *should* believe or do.  
-It is about protecting the conditions that allow systems to **continue improving safely**.
+> **“Does this change reduce the system’s ability to survive, recover, or self-correct over time?”**
 
 ---
 
 ## Core Concept: The God Variable (Gv)
 
-GodScore CI evaluates a single scalar metric — the **God Variable (Gv)** — representing aggregate survivability signals.
+At the heart of the framework is the **God Variable (Gv)**:  
+a scalar metric intended to summarize a system’s **survivability, self-correctability, and irreversibility risk**.
 
-Gv is composed of weighted components such as:
+- **Higher Gv** → greater long-term resilience  
+- **Lower Gv** → increased risk of silent degradation or irreversible failure
 
-- **Auditability**  
-  Can behavior be inspected, understood, and reviewed?
+The **GodScore** is the computed instantiation of Gv at a given point in time, evaluated before and after proposed changes.
 
-- **Reversibility**  
-  Can changes be undone or corrected?
-
-- **Irreversibility Risk**  
-  Does this introduce permanent failure modes?
-
-- **Self-Correction Capacity**  
-  Can the system detect and repair its own errors?
-
-These components are intentionally explicit and inspectable.  
-There is no hidden optimization or opaque scoring.
+GodScore CI treats regressions in Gv as *first-class failures*, even when traditional tests pass.
 
 ---
 
-## What GodScore CI Does
+## Why This Exists
 
-GodScore CI integrates into GitHub Actions to provide:
+Modern systems often fail through:
+- Cumulative technical debt
+- Gradual erosion of recovery paths
+- Silent loss of reversibility
+- Optimization for short-term success at long-term cost
 
-- A **CLI** for computing survivability scores
-- A **CI gate** that enforces minimum survivability thresholds
-- **Reports** generated as CI artifacts (not tracked in git)
-- **Pull-request feedback** for visibility and review
-- Deterministic, testable behavior suitable for experimentation
-
-Survivability becomes a **first-class CI signal**, alongside tests and linting.
-
----
-
-## What This Is (and Is Not)
-
-### This *is*:
-- An experimental CI framework
-- A survivability scoring scaffold
-- A research and safety exploration tool
-- A foundation for future refinement
-
-### This is *not*:
-- A moral authority
-- A truth engine
-- A replacement for human judgment
-- A claim about consciousness or agency
-
-GodScore CI makes **no metaphysical claims**.  
-It measures properties of systems, not beliefs about reality.
+Traditional CI pipelines are excellent at enforcing **local correctness**.  
+GodScore CI extends this by enforcing **global survivability constraints**.
 
 ---
 
-## Example Workflow
+## How It Works
 
-A typical pipeline looks like:
+GodScore CI integrates into GitHub Actions and evaluates changes using:
 
-1. Code changes are pushed or proposed
-2. GodScore CLI computes a Gv score
-3. The CI gate enforces a minimum survivability threshold
-4. Reports are generated and attached as artifacts
-5. Pull requests receive survivability feedback
+- **Invariant tests** – enforce formal properties of Gv
+- **Perturbation tests** – simulate disruptions and recovery
+- **Regression checks** – compare current Gv against historical baselines
+- **Irreversibility detection** – flag non-recoverable state transitions
 
-If survivability drops below policy, the gate fails.
+If a change causes a meaningful regression in Gv, the CI gate responds based on configured strictness.
+
+---
+
+## CI Gate Modes
+
+- **Free Mode**  
+  - Emits warnings
+  - Ideal for experimentation and learning
+  - Never blocks merges
+
+- **Pro Mode**  
+  - Enforces hard failures on Gv regression
+  - Designed for high-stakes or long-lived systems
+
+---
+
+## Scientific Framing & Falsifiability
+
+GodScore CI is intentionally **test-driven and falsifiable**.
+
+Core claims can be evaluated empirically by:
+- Deploying GodScore CI in real repositories
+- Comparing long-term system outcomes against control groups
+- Running ablation tests (removing components)
+- Measuring recovery behavior over extended time horizons
+
+If systems gated by GodScore CI show no measurable improvement—or worse outcomes—the framework’s central hypothesis fails.
+
+This project is **not a claim of ultimate truth**, but a structured, testable proposal.
+
+---
+
+## Known Limitations
+
+- **Scalar simplification**  
+  Survivability is complex; a single metric cannot capture all dimensions.  
+  Future extensions may include multi-dimensional or component-wise Gv variants.
+
+- **Provider dependency**  
+  Gv computation may rely on external or pluggable providers.  
+  Deterministic reference implementations are encouraged for reproducibility.
+
+- **Early-stage validation**  
+  Large-scale, long-horizon empirical results are still pending.
+
+These limitations are acknowledged by design, not hidden.
+
+---
+
+## What Kind of Project Is This?
+
+GodScore CI is best understood as a:
+
+- **Systems constraint framework**
+- **Resilience-focused CI extension**
+- **Research-oriented engineering tool**
+
+It draws inspiration from systems theory, AI safety metrics, and irreversibility modeling, while remaining grounded in executable code and automated tests.
 
 ---
 
 ## Status
 
-GodScore CI is **experimental** and under active exploration.
-
-The current implementation provides:
-- A stable CLI interface
-- Deterministic CI workflows
-- A clean artifact model
-- A clear extension surface for new metrics
-
-The scoring model is intentionally conservative and designed to evolve.
+🧪 Experimental  
+🔧 Actively evolving  
+📖 Open to critique, extension, and falsification
 
 ---
 
-## Who This Is For
+## License
 
-- Researchers exploring long-term system alignment
-- Engineers experimenting with safety-aware CI
-- Organizations interested in survivability metrics
-- Anyone curious about making systems harder to irreversibly break
-
----
-
-## License & Use
-
-This project is open-source and intended for research, experimentation, and responsible exploration.
-
-If you use or extend it, attribution is appreciated.
-
----
-
-### Final Note
-
-GodScore CI does not claim to solve alignment.
-
-It asks whether we are **building systems that can keep correcting themselves** —  
-and gives CI the tools to care about that question.
+MIT
