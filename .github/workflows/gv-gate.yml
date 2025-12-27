@@ -1,18 +1,20 @@
 name: GodScore CI Gate
 
 on:
-  pull_request:
   push:
     branches: ["**"]
+  pull_request:
 
 permissions:
   contents: read
+  pull-requests: write
 
 jobs:
   gate:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up Python
@@ -25,36 +27,19 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e .
 
+      # 🔑 CRITICAL: gv_out must exist (it is no longer tracked in git)
       - name: Prepare output directory
         run: mkdir -p gv_out
 
-      - name: Run GodScore
+      - name: Run GodScore Gate
         run: |
-          python -m godscore_ci.cli score . --outdir gv_out
+          python -m godscore_ci.cli gate . \
+            --outdir gv_out \
+            --min-score 0.30
 
-
-      - name: Enforce threshold
-        env:
-          GV_MIN: "0.30"
-        run: |
-          python - <<'PY'
-          import json, os
-          p = "gv_out/gv_report.json"
-          with open(p, "r", encoding="utf-8") as f:
-            report = json.load(f)
-          gv = float(report.get("gv_score", 0.0))
-          gv_min = float(os.environ.get("GV_MIN", "0.0"))
-          print(f"Gv Score: {gv} (min required: {gv_min})")
-          if gv < gv_min:
-            raise SystemExit(f"FAIL: gv_score {gv} < {gv_min}")
-          print("PASS: threshold met")
-          PY
-
-      - name: Upload reports
+      - name: Upload Gate Report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: godscore-gate-reports
-          path: |
-            gv_out/gv_report.json
-            gv_out/gv_report.md
+          name: godscore-gate-report
+          path: gv_out/
