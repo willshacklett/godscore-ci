@@ -1,0 +1,17 @@
+name: GodScore Marketplace Smoke Test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: GodScore CI (free mode)
+        uses: willshacklett/godscore-ci@v0.2.2
+        with:
+          score: "0.92"
+          threshold: "0.80"
+          mode: "free"
