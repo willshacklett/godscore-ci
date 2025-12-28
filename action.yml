@@ -1,34 +1,36 @@
 # GitHub Marketplace entry point
 
 name: "GodScore CI"
-description: "Survivability-aware CI gate enforcing God Variable (Gv) thresholds"
+description: "Survivability-aware CI gate enforcing God Variable (Gv) thresholds."
 author: "William Shacklett"
 
 branding:
-  icon: shield
-  color: blue
+  icon: "shield"
+  color: "blue"
 
 inputs:
   score:
-    description: "God Variable score to evaluate"
+    description: "God Variable score to evaluate."
     required: true
+
   threshold:
-    description: "Minimum allowed Gv score"
+    description: "Minimum allowed Gv score."
     required: false
     default: "0.80"
 
-      mode:
-    description: "Execution mode: free (warn on regression) or pro (fail on regression)"
+  mode:
+    description: "Execution mode: free (warn on regression) or pro (fail on regression)."
     required: false
     default: "free"
 
-      pro_token:
-    description: "Pro token (optional). Pass secrets.GV_PRO_TOKEN here to enable pro enforcement."
+  pro_token:
+    description: "Optional Pro token. Pass secrets.GV_PRO_TOKEN to enable pro enforcement."
     required: false
+    default: ""
 
 outputs:
   passed:
-    description: "Whether the Gv gate passed"
+    description: "Whether the Gv gate passed."
 
 runs:
   using: "composite"
@@ -39,15 +41,17 @@ runs:
         python-version: "3.11"
 
     - name: Install dependencies
-      run: pip install pyyaml
       shell: bash
+      run: |
+        python -m pip install --upgrade pip
+        pip install pyyaml
 
-- name: Run GodScore Gate
-  env:
-    GV_PRO_TOKEN: ${{ inputs.pro_token }}
-  run: |
-    python gv_gate.py \
-      --score "${{ inputs.score }}" \
-      --threshold "${{ inputs.threshold }}" \
-      --mode "${{ inputs.mode }}"
-
+    - name: Run GodScore Gate
+      shell: bash
+      env:
+        GV_PRO_TOKEN: ${{ inputs.pro_token }}
+      run: |
+        python gv_gate.py \
+          --score "${{ inputs.score }}" \
+          --threshold "${{ inputs.threshold }}" \
+          --mode "${{ inputs.mode }}"
