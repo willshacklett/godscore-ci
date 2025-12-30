@@ -19,7 +19,7 @@ inputs:
     default: "0.80"
 
   mode:
-    description: "Execution mode: free (warn on regression) or pro (fail on regression)."
+    description: "Execution mode: free (warn) or pro (fail)."
     required: false
     default: "free"
 
@@ -35,6 +35,14 @@ outputs:
 runs:
   using: "composite"
   steps:
+    # This ensures gv_gate.py exists even when the action is used from another repository.
+    - name: Checkout GodScore CI action repo
+      uses: actions/checkout@v4
+      with:
+        repository: willshacklett/godscore-ci
+        ref: main
+        path: godscore-ci
+
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
@@ -51,7 +59,15 @@ runs:
       env:
         GV_PRO_TOKEN: ${{ inputs.pro_token }}
       run: |
-        python gv_gate.py \
+        set +e
+        python godscore-ci/gv_gate.py \
           --score "${{ inputs.score }}" \
           --threshold "${{ inputs.threshold }}" \
           --mode "${{ inputs.mode }}"
+        code=$?
+        if [ $code -eq 0 ]; then
+          echo "passed=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "passed=false" >> "$GITHUB_OUTPUT"
+        fi
+        exit $code
