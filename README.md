@@ -14,7 +14,7 @@ At the heart of the framework is the **God Variable (Gv)**:
 a scalar metric intended to summarize a system’s **survivability, self-correctability, and irreversibility risk**.
 
 - **Higher Gv** → greater long-term resilience  
-- **Lower Gv** → increased risk of silent degradation or irreversible failure
+- **Lower Gv** → increased risk of silent degradation or irreversible failure  
 
 The **GodScore** is the computed instantiation of Gv at a given point in time, evaluated before and after proposed changes.
 
@@ -25,10 +25,11 @@ GodScore CI treats regressions in Gv as *first-class failures*, even when tradit
 ## Why This Exists
 
 Modern systems often fail through:
-- Cumulative technical debt
-- Gradual erosion of recovery paths
-- Silent loss of reversibility
-- Optimization for short-term success at long-term cost
+
+- Cumulative technical debt  
+- Gradual erosion of recovery paths  
+- Silent loss of reversibility  
+- Optimization for short-term success at long-term cost  
 
 Traditional CI pipelines are excellent at enforcing **local correctness**.  
 GodScore CI extends this by enforcing **global survivability constraints**.
@@ -39,10 +40,10 @@ GodScore CI extends this by enforcing **global survivability constraints**.
 
 GodScore CI integrates into GitHub Actions and evaluates changes using:
 
-- **Invariant tests** – enforce formal properties of Gv
-- **Perturbation tests** – simulate disruptions and recovery
-- **Regression checks** – compare current Gv against historical baselines
-- **Irreversibility detection** – flag non-recoverable state transitions
+- **Invariant tests** – enforce formal properties of Gv  
+- **Perturbation tests** – simulate disruptions and recovery  
+- **Regression checks** – compare current Gv against historical baselines  
+- **Irreversibility detection** – flag non-recoverable state transitions  
 
 If a change causes a meaningful regression in Gv, the CI gate responds based on configured strictness.
 
@@ -50,70 +51,37 @@ If a change causes a meaningful regression in Gv, the CI gate responds based on 
 
 ## CI Gate Modes
 
-- **Free Mode**  
-  - Emits warnings
+- **Free Mode**
+  - Emits warnings only
   - Ideal for experimentation and learning
   - Never blocks merges
 
-- **Pro Mode**  
+- **Pro Mode**
   - Enforces hard failures on Gv regression
   - Designed for high-stakes or long-lived systems
 
 ---
 
-## Scientific Framing & Falsifiability
+## Quick Start (GitHub Actions)
 
-GodScore CI is intentionally **test-driven and falsifiable**.
+Add GodScore CI to an existing GitHub Actions workflow:
 
-Core claims can be evaluated empirically by:
-- Deploying GodScore CI in real repositories
-- Comparing long-term system outcomes against control groups
-- Running ablation tests (removing components)
-- Measuring recovery behavior over extended time horizons
+```yaml
+name: GodScore CI
 
-If systems gated by GodScore CI show no measurable improvement—or worse outcomes—the framework’s central hypothesis fails.
+on:
+  pull_request:
+  push:
 
-This project is **not a claim of ultimate truth**, but a structured, testable proposal.
+jobs:
+  godscore:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
----
-
-## Known Limitations
-
-- **Scalar simplification**  
-  Survivability is complex; a single metric cannot capture all dimensions.  
-  Future extensions may include multi-dimensional or component-wise Gv variants.
-
-- **Provider dependency**  
-  Gv computation may rely on external or pluggable providers.  
-  Deterministic reference implementations are encouraged for reproducibility.
-
-- **Early-stage validation**  
-  Large-scale, long-horizon empirical results are still pending.
-
-These limitations are acknowledged by design, not hidden.
-
----
-
-## What Kind of Project Is This?
-
-GodScore CI is best understood as a:
-
-- **Systems constraint framework**
-- **Resilience-focused CI extension**
-- **Research-oriented engineering tool**
-
-It draws inspiration from systems theory, AI safety metrics, and irreversibility modeling, while remaining grounded in executable code and automated tests.
-
----
-
-## Status
-
-🧪 Experimental  
-🔧 Actively evolving  
-📖 Open to critique, extension, and falsification
-
----
-
-## License
-
-MIT
+      - name: Run GodScore CI gate
+        uses: willshacklett/godscore-ci@v0.2.4
+        with:
+          score: "0.85"
+          threshold: "0.80"
+          mode: "free"
