@@ -1,0 +1,8 @@
+godscore-demo/
+  src/
+    engine.py
+    adapters.py
+  tests/
+    test_engine.py
+  gv.yml
+  README.md
