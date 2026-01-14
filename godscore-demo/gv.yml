@@ -6,7 +6,8 @@ signals:
     description: "Engine should not import adapters"
     type: grep_count
     pattern: "from godscore_demo.src.adapters import"
-    path: "godscore-demo/src/engine.py"
+    path: "src/engine.py"
+
     weight: 0.6
 
   tests:
