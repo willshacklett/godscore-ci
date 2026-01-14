@@ -1,0 +1,16 @@
+mode: strict
+threshold_drop: 0.05
+
+signals:
+  coupling_proxy:
+    description: "Engine should not import adapters"
+    type: grep_count
+    pattern: "from godscore_demo.src.adapters import"
+    path: "godscore-demo/src/engine.py"
+    weight: 0.6
+
+  tests:
+    description: "Tests must pass"
+    type: pytest
+    path: "godscore-demo"
+    weight: 0.4
