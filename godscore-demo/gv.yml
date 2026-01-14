@@ -5,7 +5,7 @@ signals:
   coupling_proxy:
     description: "Engine should not import adapters"
     type: grep_count
-    pattern: "from godscore_demo.src.adapters import"
+    pattern: "adapters"
     path: "src/engine.py"
 
     weight: 0.6
