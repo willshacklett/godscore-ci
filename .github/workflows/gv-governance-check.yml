@@ -1,0 +1,16 @@
+name: GV Governance Check (optional)
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  gv-governance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run GV governance check (flag-gated)
+        run: python tools/gv_eval.py
