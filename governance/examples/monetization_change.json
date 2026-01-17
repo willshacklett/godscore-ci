@@ -1,1 +1,27 @@
+{
+  "change_id": "ads_in_free_tier_test",
+  "change_type": "monetization_experiment",
+  "description": "Introduce limited ads in free-tier conversational interface",
+
+  "signals": {
+    "trust_delta": -0.04,
+    "answer_integrity_delta": -0.01,
+    "user_autonomy_delta": -0.02,
+    "system_stability_delta": 0.03
+  },
+
+  "gv_weights": {
+    "trust": 0.35,
+    "answer_integrity": 0.30,
+    "user_autonomy": 0.20,
+    "system_stability": 0.15
+  },
+
+  "gv_net_delta": -0.018,
+
+  "evaluation": {
+    "result": "FAIL",
+    "reason": "Net negative survivability impact despite revenue upside"
+  }
+}
 
