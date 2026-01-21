@@ -74,7 +74,7 @@ Early feedback highlights the value of catching slow system degradation beyond t
 
 ---
 
-## Quick Start (GitHub Actions)
+## GitHub Actions Integration (Reference)
 
 Add GodScore CI to an existing GitHub Actions workflow:
 
@@ -97,6 +97,8 @@ jobs:
           score: "0.85"
           threshold: "0.80"
           mode: "free"
+
+---
 
 ## Governance & Survivability (Gv)
 
