@@ -1,5 +1,13 @@
 # GodScore CI
 
+## Quick Start (5 minutes)
+
+Want to see GodScore CI work — or fail — immediately?
+
+➡️ **[Minimal passing and failing examples](./examples)**
+
+Copy one file, commit, and watch CI decide whether the system survives.
+
 **GodScore CI** is a constraint-based Continuous Integration (CI) framework designed to detect *irreversible or long-term degradations* in evolving systems—issues that traditional CI pipelines often miss.
 
 Rather than asking “Does this change work right now?”, GodScore CI asks:
