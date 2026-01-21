@@ -68,6 +68,10 @@ If a change causes a meaningful regression in Gv, the CI gate responds based on 
   - Enforces hard failures on Gv regression
   - Designed for high-stakes or long-lived systems
 
+### Feedback
+
+Early feedback highlights the value of catching slow system degradation beyond traditional CI tests.
+
 ---
 
 ## Quick Start (GitHub Actions)
