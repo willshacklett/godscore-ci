@@ -2,6 +2,12 @@
 
 This folder contains minimal examples showing how GodScore CI behaves.
 
+## Quick Examples
+
+Want to see it work (or fail) immediately?
+
+➡️ [Minimal passing and failing examples](./examples)
+
 ## Files
 
 - `passes.yml`  
