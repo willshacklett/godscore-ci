@@ -74,6 +74,22 @@ Early feedback highlights the value of catching slow system degradation beyond t
 
 ---
 
+## Governance & Survivability (Gv)
+
+In addition to detecting long-term system degradation in codebases,
+this project explores whether **system-level changes** (e.g. product,
+monetization, or policy decisions) can be evaluated against long-term
+survivability constraints.
+
+The `governance/` directory contains **non-functional, exploratory
+documentation** and examples illustrating how a survivability scalar
+(Gv) could be used to reason about trust, autonomy, and system stability
+before irreversible changes are deployed.
+
+These materials are informational and do not affect CI behavior.
+
+---
+
 ## GitHub Actions Integration (Reference)
 
 Add GodScore CI to an existing GitHub Actions workflow:
@@ -97,19 +113,3 @@ jobs:
           score: "0.85"
           threshold: "0.80"
           mode: "free"
-
----
-
-## Governance & Survivability (Gv)
-
-In addition to detecting long-term system degradation in codebases,
-this project explores whether **system-level changes** (e.g. product,
-monetization, or policy decisions) can be evaluated against long-term
-survivability constraints.
-
-The `governance/` directory contains **non-functional, exploratory
-documentation** and examples illustrating how a survivability scalar
-(Gv) could be used to reason about trust, autonomy, and system stability
-before irreversible changes are deployed.
-
-These materials are informational and do not affect CI behavior.
