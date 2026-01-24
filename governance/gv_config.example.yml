@@ -1,3 +1,0 @@
-# Rename this file to gv_config.yml to enable GV governance checks in CI.
-# This is intentionally a flag-by-presence gate.
-enabled: true
