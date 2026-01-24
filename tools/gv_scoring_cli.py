@@ -2,20 +2,28 @@
 """
 gv_gate.py — God Variable trajectory gate (CI-friendly)
 
-Reads a CSV with a 'date' column + metric columns and computes:
-- trend slope (linear regression)
-- acceleration (2nd difference)
-- variance drift (rolling variance slope)
+What it does:
+- Reads a CSV with a 'date' column + metric columns
+- For each metric, computes:
+  - trend slope (linear regression)
+  - acceleration (2nd difference)
+  - variance drift (rolling variance slope)
+- Converts those into a *risk* score per metric (higher risk = worse)
+- Aggregates into a single Gv score in [0,1] (higher = healthier)
+- Exits 1 if Gv < threshold (perfect for GitHub Actions)
 
-Supports per-metric direction (higher/lower is better) and weights.
-Outputs a Gv score in [0,1]; exits 1 if below threshold.
+Key upgrades vs what you pasted:
+- NaN-safe
+- Supports per-metric direction: higher-is-better OR lower-is-better
+- Only penalizes *degradation* (won't punish improvements)
+- Weights + directions via a single JSON config
 """
 
 import argparse
 import json
 import sys
 from dataclasses import dataclass
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 import numpy as np
 import pandas as pd
@@ -29,6 +37,7 @@ class MetricConfig:
 
 
 def _safe_linregress(x: np.ndarray, y: np.ndarray) -> Dict[str, float]:
+    # linregress needs >=2 points
     if len(y) < 2:
         return {"slope": 0.0, "r2": 0.0}
     res = linregress(x, y)
@@ -55,7 +64,7 @@ def compute_trajectory_dynamics(series: pd.Series, window: int = 5) -> Dict[str,
     if len(roll_var) >= 3:
         xv = np.arange(len(roll_var), dtype=float)
         var_reg = _safe_linregress(xv, roll_var.values.astype(float))
-        var_drift = float(var_reg["slope"])
+        var_drift = var_reg["slope"]
     else:
         var_drift = 0.0
 
@@ -72,6 +81,19 @@ def compute_trajectory_dynamics(series: pd.Series, window: int = 5) -> Dict[str,
 
 
 def parse_config(config_str: str, metric_names: list[str]) -> Dict[str, MetricConfig]:
+    """
+    config_str can be:
+      - "equal"
+      - JSON dict:
+          {
+            "mmlu": {"weight": 2, "direction": "higher"},
+            "loss": {"weight": 3, "direction": "lower"},
+            "latency_ms": {"weight": 1.5, "direction": "lower"}
+          }
+        Or shorthand:
+          {"mmlu": 2, "loss": 3}
+        (direction defaults to "higher")
+    """
     if config_str == "equal":
         return {m: MetricConfig() for m in metric_names}
 
@@ -98,11 +120,27 @@ def parse_config(config_str: str, metric_names: list[str]) -> Dict[str, MetricCo
     return cfg
 
 
-def _orient_series(series: pd.Series, direction: str) -> pd.Series:
-    return series if direction == "higher" else -series
+def _orient_series_for_scoring(series: pd.Series, direction: str) -> pd.Series:
+    # Convert all metrics to a unified "higher is better" orientation for scoring
+    if direction == "higher":
+        return series
+    if direction == "lower":
+        return -series
+    # Should never happen due to validation
+    return series
 
 
-def metric_risk(dyn: Dict[str, Any], k_slope: float, k_accel: float, k_var: float) -> float:
+def metric_risk_from_dynamics(dyn: Dict[str, Any],
+                              k_slope: float,
+                              k_accel: float,
+                              k_var: float) -> float:
+    """
+    Risk is >= 0. Higher risk means the metric is degrading:
+      - negative trend slope increases risk
+      - negative acceleration (decline speeding up) increases risk
+      - positive variance drift increases risk
+    Assumes dyn was computed on oriented series where "higher is better".
+    """
     if not dyn.get("valid", False):
         return 0.0
 
@@ -110,14 +148,21 @@ def metric_risk(dyn: Dict[str, Any], k_slope: float, k_accel: float, k_var: floa
     accel = float(dyn["loss_acceleration"])
     var_drift = float(dyn["variance_drift_slope"])
 
-    slope_risk = max(0.0, -slope)     # only penalize downward trend
-    accel_risk = max(0.0, -accel)     # only penalize accelerating decline
-    var_risk = max(0.0, var_drift)    # increasing variance = destabilization
+    # Only penalize *degradation*
+    slope_risk = max(0.0, -slope)           # downward trend = risk
+    accel_risk = max(0.0, -accel)           # decline speeding up = risk
+    var_risk = max(0.0, var_drift)          # increasing instability = risk
 
-    return float(k_slope * slope_risk + k_accel * accel_risk + k_var * var_risk)
+    # Weighted sum in "risk space"
+    risk = (k_slope * slope_risk) + (k_accel * accel_risk) + (k_var * var_risk)
+    return float(risk)
 
 
-def gv_from_risk(weighted_risk_sum: float, total_weight: float, alpha: float) -> float:
+def gv_from_weighted_risk(weighted_risk_sum: float, total_weight: float, alpha: float) -> float:
+    """
+    Convert risk -> Gv in [0,1] using a smooth, tunable mapping.
+    Higher alpha => harsher penalty for risk.
+    """
     if total_weight <= 0:
         return 1.0
     avg_risk = weighted_risk_sum / total_weight
@@ -126,11 +171,16 @@ def gv_from_risk(weighted_risk_sum: float, total_weight: float, alpha: float) ->
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(description="Gv trajectory gate – CI-friendly constraint monitor")
+    p = argparse.ArgumentParser(description="Gv trajectory gate – constraint-field monitor for system/AI metrics")
     p.add_argument("input_csv", help="CSV with a 'date' column + metric columns")
     p.add_argument("--threshold", type=float, default=0.80, help="Fail if Gv < threshold (default: 0.80)")
-    p.add_argument("--config", type=str, default="equal",
-                   help=r"""Metric config JSON or 'equal'. Example: '{"mmlu":{"weight":2,"direction":"higher"},"loss":{"weight":3,"direction":"lower"}}'""")
+    p.add_argument(
+        "--config",
+        type=str,
+        default="equal",
+        help=("Metric config JSON or 'equal'. Example: "
+              r"""'{"mmlu":{"weight":2,"direction":"higher"},"loss":{"weight":3,"direction":"lower"}}'"""),
+    )
     p.add_argument("--window", type=int, default=5, help="Rolling variance window (default: 5)")
     p.add_argument("--alpha", type=float, default=10.0, help="Risk-to-Gv sensitivity (default: 10.0)")
     p.add_argument("--k_slope", type=float, default=10.0, help="Slope risk multiplier (default: 10.0)")
@@ -144,33 +194,33 @@ def main() -> None:
         raise SystemExit("CSV must include a 'date' column.")
 
     df = df.sort_values("date")
-    metrics = [c for c in df.columns if c != "date"]
-    if not metrics:
+    metric_cols = [c for c in df.columns if c != "date"]
+    if not metric_cols:
         raise SystemExit("CSV must include at least one metric column besides 'date'.")
 
-    cfg = parse_config(args.config, metrics)
+    cfg = parse_config(args.config, metric_cols)
 
     per_metric = []
     weighted_risk_sum = 0.0
     total_weight = 0.0
 
-    for m in metrics:
-        oriented = _orient_series(df[m], cfg[m].direction)
+    for m in metric_cols:
+        oriented = _orient_series_for_scoring(df[m], cfg[m].direction)
         dyn = compute_trajectory_dynamics(oriented, window=args.window)
         dyn["metric"] = m
         dyn["direction"] = cfg[m].direction
         dyn["weight"] = float(cfg[m].weight)
 
-        r = metric_risk(dyn, args.k_slope, args.k_accel, args.k_var)
-        dyn["risk"] = float(round(r, 6))
+        risk = metric_risk_from_dynamics(dyn, args.k_slope, args.k_accel, args.k_var)
+        dyn["risk"] = float(round(risk, 6))
 
         if dyn.get("valid", False):
-            weighted_risk_sum += r * cfg[m].weight
+            weighted_risk_sum += risk * cfg[m].weight
             total_weight += cfg[m].weight
 
         per_metric.append(dyn)
 
-    gv = gv_from_risk(weighted_risk_sum, total_weight, alpha=args.alpha)
+    gv = gv_from_weighted_risk(weighted_risk_sum, total_weight, alpha=args.alpha)
     gv = float(round(gv, 4))
 
     report = {
@@ -190,7 +240,8 @@ def main() -> None:
     else:
         status = "PASS" if report["pass"] else "FAIL – IRREVERSIBILITY RISK"
         print(f"Gv Score: {gv}")
-        print(f"Threshold: {args.threshold} → {status}\n")
+        print(f"Threshold: {args.threshold} → {status}")
+        print("")
         print("Per-metric dynamics (oriented so 'higher is better'):")
         for d in per_metric:
             if not d.get("valid", False):

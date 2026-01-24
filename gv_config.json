@@ -1,0 +1,6 @@
+{
+  "mmlu": {"weight": 2, "direction": "higher"},
+  "gpqa": {"weight": 2, "direction": "higher"},
+  "loss": {"weight": 3, "direction": "lower"},
+  "latency_ms": {"weight": 1.5, "direction": "lower"}
+}
