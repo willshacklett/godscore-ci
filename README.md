@@ -25,6 +25,7 @@ https://willshacklett.github.io/godscore-ci/dashboard/
 
 ---
 
+
 ## Why GodScore
 
 Most CI systems answer one question:
