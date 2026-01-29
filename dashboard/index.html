@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>GodScore Dashboard</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; padding: 0; background: #0b0e14; color: #e7eaf0; }
+    header { padding: 20px 18px; border-bottom: 1px solid #1b2230; background: #0b0e14; position: sticky; top: 0; }
+    .wrap { max-width: 980px; margin: 0 auto; }
+    h1 { font-size: 18px; margin: 0 0 6px 0; letter-spacing: .2px; }
+    .sub { color: #a8b3c7; font-size: 13px; }
+    .grid { display: grid; grid-template-columns: 1fr; gap: 14px; padding: 18px; }
+    .card { background: #0f1420; border: 1px solid #1b2230; border-radius: 12px; padding: 14px; }
+    .kpi { display: flex; align-items: baseline; gap: 10px; }
+    .kpi .score { font-size: 42px; font-weight: 700; }
+    .kpi .label { color: #a8b3c7; font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 10px 8px; border-bottom: 1px solid #1b2230; font-size: 13px; }
+    th { text-align: left; color: #a8b3c7; font-weight: 600; }
+    .pill { display: inline-block; padding: 3px 8px; border-radius: 999px; border: 1px solid #1b2230; font-size: 12px; color: #a8b3c7; }
+    .row { display:flex; gap:14px; flex-wrap: wrap; }
+    .row .card { flex: 1 1 320px; }
+    a { color: #8ab4ff; text-decoration: none; }
+    footer { padding: 18px; color:#a8b3c7; font-size: 12px; }
+    .muted { color:#a8b3c7; }
+    .delta { font-weight: 650; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <h1>GodScore Dashboard</h1>
+      <div class="sub">Live score + trend history (auto-updated by GitHub Actions)</div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <div class="grid">
+      <div class="row">
+        <div class="card">
+          <div class="kpi">
+            <div class="score" id="latestScore">--</div>
+            <div>
+              <div class="label">Latest GodScore</div>
+              <div class="muted" id="latestMeta">—</div>
+              <div class="muted">Δ vs previous: <span class="delta" id="latestDelta">—</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div>
+              <div style="font-weight:650;">Trend</div>
+              <div class="muted">Last 30 runs (or fewer)</div>
+            </div>
+            <span class="pill" id="runCount">— runs</span>
+          </div>
+          <canvas id="chart" height="120"></canvas>
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <div style="font-weight:650;">History</div>
+          <div class="muted">Newest first</div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Time (UTC)</th>
+              <th>Ref</th>
+              <th>SHA</th>
+              <th>GodScore</th>
+            </tr>
+          </thead>
+          <tbody id="historyTable"></tbody>
+        </table>
+      </div>
+
+      <footer>
+        <span class="muted">Next: wire the placeholder score to real godscore-ci output, then add component breakdown + thresholds.</span>
+      </footer>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    async function loadHistory() {
+      const res = await fetch("./data/history.json", { cache: "no-store" });
+      if (!res.ok) throw new Error("Failed to load history.json");
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    }
+
+    function fmtTs(ts) {
+      try { return new Date(ts).toISOString().replace(".000Z","Z"); } catch { return ts; }
+    }
+
+    function render(history) {
+      history = history.slice().sort((a,b) => (a.ts < b.ts ? -1 : 1)); // ascending
+      const latest = history[history.length - 1];
+      const prev = history[history.length - 2];
+
+      document.getElementById("runCount").textContent = `${history.length} runs`;
+
+      if (latest) {
+        document.getElementById("latestScore").textContent = latest.godscore ?? "--";
+        document.getElementById("latestMeta").innerHTML = `${fmtTs(latest.ts)} • <span class="pill">${latest.ref ?? "main"}</span> • <span class="pill">${latest.sha ?? ""}</span>`;
+        if (prev && typeof latest.godscore === "number" && typeof prev.godscore === "number") {
+          const d = latest.godscore - prev.godscore;
+          document.getElementById("latestDelta").textContent = (d >= 0 ? "+" : "") + d.toFixed(0);
+        } else {
+          document.getElementById("latestDelta").textContent = "—";
+        }
+      }
+
+      // Table newest first
+      const tbody = document.getElementById("historyTable");
+      tbody.innerHTML = "";
+      const newestFirst = history.slice().reverse();
+      newestFirst.slice(0, 30).forEach(x => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${fmtTs(x.ts ?? "")}</td>
+          <td>${x.ref ?? ""}</td>
+          <td><code>${x.sha ?? ""}</code></td>
+          <td><strong>${x.godscore ?? ""}</strong></td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      // Chart
+      const last30 = history.slice(-30);
+      const labels = last30.map(x => (x.sha ?? "").toString());
+      const scores = last30.map(x => x.godscore ?? null);
+
+      const ctx = document.getElementById("chart").getContext("2d");
+      new Chart(ctx, {
+        type: "line",
+        data: {
+          labels,
+          datasets: [{ label: "GodScore", data: scores, tension: 0.25 }]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { ticks: { maxTicksLimit: 6 } },
+            y: { suggestedMin: 0, suggestedMax: 100 }
+          }
+        }
+      });
+    }
+
+    (async () => {
+      try {
+        const history = await loadHistory();
+        render(history);
+      } catch (e) {
+        document.getElementById("latestMeta").textContent = "No history yet. Push to main to generate the first entry.";
+        console.error(e);
+      }
+    })();
+  </script>
+</body>
+</html>
