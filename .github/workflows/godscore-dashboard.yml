@@ -3,10 +3,12 @@ name: GodScore Dashboard (GitHub Pages)
 on:
   push:
     branches: ["main"]
+    paths-ignore:
+      - "dashboard/data/history.json"   # prevents infinite loop when we commit history
   workflow_dispatch: {}
 
 permissions:
-  contents: write
+  contents: write     # needed to commit history.json
   pages: write
   id-token: write
 
@@ -15,22 +17,27 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-and-publish:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout main
+      - name: Checkout
         uses: actions/checkout@v4
 
-      # --- 1) Create a "run snapshot" (for now it's a stub you can wire into godscore-ci output next)
-      - name: Generate score snapshot
+      # 1) Ensure history file exists
+      - name: Ensure history.json
         run: |
           mkdir -p dashboard/data
+          if [ ! -f dashboard/data/history.json ]; then
+            echo "[]" > dashboard/data/history.json
+          fi
+
+      # 2) Generate a snapshot (placeholder for now)
+      - name: Generate snapshot
+        run: |
           python - << 'PY'
           import json, os, datetime
-          # TODO: Replace this with your real score output path once we wire it in.
-          # For now, we set a placeholder so the dashboard is live immediately.
-          score = 80
+          score = 80  # TODO: wire to real godscore-ci output next step
 
           snap = {
             "ts": datetime.datetime.utcnow().isoformat() + "Z",
@@ -38,43 +45,15 @@ jobs:
             "sha": os.environ.get("GITHUB_SHA", "")[:7],
             "godscore": score
           }
+
           with open("dashboard/data/snapshot.json","w") as f:
             json.dump(snap, f, indent=2)
-          print("Wrote snapshot:", snap)
+          print("snapshot:", snap)
           PY
 
-      # --- 2) Switch to / create gh-pages branch and append snapshot to history.json
-      - name: Publish dashboard + append history
+      # 3) Append snapshot to history.json (keep last 200)
+      - name: Append history
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          # Create a temp dir with dashboard site files
-          mkdir -p _site
-          cp -r dashboard/* _site/
-
-          # Fetch gh-pages if it exists
-          git fetch origin gh-pages || true
-
-          if git show-ref --verify --quiet refs/remotes/origin/gh-pages; then
-            git checkout -b gh-pages origin/gh-pages
-          else
-            git checkout --orphan gh-pages
-            rm -rf ./*
-          fi
-
-          mkdir -p dashboard/data
-
-          # Copy the newly built site over
-          rm -rf dashboard
-          cp -r _site dashboard
-
-          # Ensure history file exists
-          if [ ! -f dashboard/data/history.json ]; then
-            echo "[]" > dashboard/data/history.json
-          fi
-
-          # Append snapshot to history.json
           python - << 'PY'
           import json
           from pathlib import Path
@@ -85,38 +64,30 @@ jobs:
           hist = json.loads(hist_path.read_text())
           snap = json.loads(snap_path.read_text())
 
-          # Avoid duplicates (same sha)
           if not any(x.get("sha") == snap.get("sha") for x in hist):
             hist.append(snap)
 
-          # Keep last 200 entries
           hist = hist[-200:]
-
           hist_path.write_text(json.dumps(hist, indent=2))
-          print(f"History entries: {len(hist)}")
+          print("history entries:", len(hist))
           PY
 
-          # Add a simple index redirect so Pages serves /dashboard nicely
-          cat > index.html <<'HTML'
-          <!doctype html>
-          <meta http-equiv="refresh" content="0; url=dashboard/">
-          <title>GodScore Dashboard</title>
-          HTML
+      # 4) Commit history back to main (but only if actor isn't the bot)
+      - name: Commit history.json
+        if: github.actor != 'github-actions[bot]'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add dashboard/data/history.json dashboard/data/snapshot.json || true
+          git commit -m "Update GodScore dashboard data" || echo "No changes"
+          git push || true
 
-          # Commit and push
-          git add -A
-          git commit -m "Add live GodScore dashboard (GitHub Pages)" || echo "No changes to commit"
-          git push origin gh-pages --force
-
-      # --- 3) Configure Pages to serve from gh-pages branch
-      - name: Configure Pages
-        uses: actions/configure-pages@v5
-
+      # 5) Upload the site for Pages (serve from repo root)
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: .
 
+      # 6) Deploy
       - name: Deploy to GitHub Pages
-        id: deployment
         uses: actions/deploy-pages@v4
