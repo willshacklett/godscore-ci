@@ -1,5 +1,15 @@
 # GodScore CI
 
+## Pricing
+
+**Free tier:** Generates a GodScore and prints guidance in CI (no blocking).
+
+**Paid tier ($10/month per repo):** Enables **enforcement** — configurable thresholds that can **fail the build** when risk is too high.
+
+> Free informs. Paid enforces.
+
+---
+
 ## Quick Start (5 minutes)
 
 Want to see GodScore CI work — or fail — immediately?
