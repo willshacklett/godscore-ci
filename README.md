@@ -10,6 +10,21 @@
 
 ---
 
+## Enforcement Mode
+
+By default, godscore-ci runs in **advisory mode** and will not fail your build.
+
+When **enforcement mode** is enabled (paid tier), godscore-ci applies a default policy:
+
+- **Fail the build if `godscore > 0.70`**
+
+This threshold is intentionally opinionated.  
+High GodScore indicates elevated systemic risk and should be reviewed before deployment.
+
+Future versions may allow custom thresholds, but enforcement always remains an explicit opt-in.
+
+---
+
 ## Quick Start (5 minutes)
 
 Want to see GodScore CI work — or fail — immediately?
