@@ -16,6 +16,15 @@ https://willshacklett.github.io/godscore-ci/dashboard/
 
 ---
 
+## Quick start
+
+```yaml
+- uses: willshacklett/godscore-ci@v0.2.6
+  with:
+    score: "0.85"
+
+---
+
 ## Why GodScore
 
 Most CI systems answer one question:
