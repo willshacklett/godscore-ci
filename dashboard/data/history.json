@@ -4,5 +4,16 @@
     "ref": "main",
     "sha": "fe2c87d",
     "godscore": 80
+  },
+  {
+    "ts": "2026-01-29T22:06:14.719627Z",
+    "ref": "main",
+    "sha": "2869582",
+    "godscore": 30,
+    "breakdown": {
+      "tests_ok": false,
+      "ruff_ok": false,
+      "ruff_findings": 72
+    }
   }
 ]
