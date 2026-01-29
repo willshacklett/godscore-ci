@@ -1,5 +1,9 @@
 # GodScore CI
 
+A survivability-aware CI gate that detects long-term system risk **before** it reaches production.
+
+---
+
 ## Pricing
 
 **Free tier:** Generates a GodScore and prints guidance in CI (no blocking).
@@ -12,14 +16,14 @@
 
 ## Enforcement Mode
 
-By default, godscore-ci runs in **advisory mode** and will not fail your build.
+By default, GodScore CI runs in **advisory mode** and will not fail your build.
 
-When **enforcement mode** is enabled (paid tier), godscore-ci applies a default policy:
+When **enforcement mode** is enabled (paid tier), GodScore CI applies an opinionated default policy:
 
-- **Fail the build if `godscore > 0.70`**
+- **Fail the build if `godscore < threshold`**
 
 This threshold is intentionally opinionated.  
-High GodScore indicates elevated systemic risk and should be reviewed before deployment.
+A low GodScore indicates elevated systemic risk and should be reviewed before deployment.
 
 Future versions may allow custom thresholds, but enforcement always remains an explicit opt-in.
 
@@ -33,9 +37,17 @@ Want to see GodScore CI work — or fail — immediately?
 
 Copy one file, commit, and watch CI decide whether the system survives.
 
-**GodScore CI** is a constraint-based Continuous Integration (CI) framework designed to detect *irreversible or long-term degradations* in evolving systems—issues that traditional CI pipelines often miss.
+---
 
-Rather than asking “Does this change work right now?”, GodScore CI asks:
+## What Is GodScore CI?
+
+**GodScore CI** is a constraint-based Continuous Integration (CI) framework designed to detect *irreversible or long-term degradations* in evolving systems — issues that traditional CI pipelines often miss.
+
+Rather than asking:
+
+> “Does this change work right now?”
+
+GodScore CI asks:
 
 > **“Does this change reduce the system’s ability to survive, recover, or self-correct over time?”**
 
@@ -43,7 +55,7 @@ Rather than asking “Does this change work right now?”, GodScore CI asks:
 
 ## Core Concept: The God Variable (Gv)
 
-At the heart of the framework is the **God Variable (Gv)**:  
+At the heart of the framework is the **God Variable (Gv)** —  
 a scalar metric intended to summarize a system’s **survivability, self-correctability, and irreversibility risk**.
 
 - **Higher Gv** → greater long-term resilience  
@@ -73,10 +85,10 @@ GodScore CI extends this by enforcing **global survivability constraints**.
 
 GodScore CI integrates into GitHub Actions and evaluates changes using:
 
-- **Invariant tests** – enforce formal properties of Gv  
-- **Perturbation tests** – simulate disruptions and recovery  
-- **Regression checks** – compare current Gv against historical baselines  
-- **Irreversibility detection** – flag non-recoverable state transitions  
+- **Invariant checks** — enforce formal properties of survivability  
+- **Perturbation tests** — simulate disruption and recovery  
+- **Regression checks** — compare current GodScore against baselines  
+- **Irreversibility detection** — flag non-recoverable transitions  
 
 If a change causes a meaningful regression in Gv, the CI gate responds based on configured strictness.
 
@@ -84,57 +96,29 @@ If a change causes a meaningful regression in Gv, the CI gate responds based on 
 
 ## CI Gate Modes
 
-- **Free Mode**
-  - Emits warnings only
-  - Ideal for experimentation and learning
-  - Never blocks merges
+### Free Mode (default)
+- Emits warnings only  
+- Ideal for experimentation and learning  
+- Never blocks merges  
 
-- **Pro Mode**
-  - Enforces hard failures on Gv regression
-  - Designed for high-stakes or long-lived systems
+### Pro Mode (enforcement)
+- Fails the build on GodScore regression  
+- Designed for high-stakes or long-lived systems  
+- Makes risk non-optional  
 
-### Feedback
-
-Early feedback highlights the value of catching slow system degradation beyond traditional CI tests.
-
----
-
-## Governance & Survivability (Gv)
-
-In addition to detecting long-term system degradation in codebases,
-this project explores whether **system-level changes** (e.g. product,
-monetization, or policy decisions) can be evaluated against long-term
-survivability constraints.
-
-The `governance/` directory contains **non-functional, exploratory
-documentation** and examples illustrating how a survivability scalar
-(Gv) could be used to reason about trust, autonomy, and system stability
-before irreversible changes are deployed.
-
-These materials are informational and do not affect CI behavior.
+> Enforcement is intentionally frictional.  
+> If it blocks you, that’s the signal.
 
 ---
 
-## GitHub Actions Integration (Reference)
+## GitHub Actions Integration
 
-Add GodScore CI to an existing GitHub Actions workflow:
+### Free (advisory / warn-only)
 
 ```yaml
-name: GodScore CI
-
-on:
-  pull_request:
-  push:
-
-jobs:
-  godscore:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Run GodScore CI gate
-        uses: willshacklett/godscore-ci@v0.2.4
-        with:
-          score: "0.85"
-          threshold: "0.80"
-          mode: "free"
+- name: GodScore CI (Free)
+  uses: willshacklett/godscore-ci@v0.2.4
+  with:
+    score: "0.85"
+    threshold: "0.80"
+    enforce: "false"
