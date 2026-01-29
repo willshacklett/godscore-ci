@@ -39,14 +39,14 @@ jobs:
         with:
           python-version: "3.11"
 
-      # 3) Install dependencies (repo deps + scoring tools)
+      # 3) Install dependencies (repo deps + common QA tools)
       - name: Install deps
         run: |
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           pip install pytest ruff
 
-      # 4) Run checks (non-blocking). We score from the results.
+      # 4) Run checks (non-blocking). We keep these for context + future breakdown.
       - name: Run checks (capture outputs)
         run: |
           set +e
@@ -63,13 +63,96 @@ jobs:
           set -e
           echo "Checks captured."
 
-      # 5) Generate snapshot.json (REAL score computed from checks)
-      - name: Generate snapshot (REAL score)
+      # 5) Generate snapshot.json using REAL GodScore engine (with safe fallbacks)
+      - name: Generate snapshot (GodScore engine)
         run: |
           python - << 'PY'
-          import json, os, datetime
+          import json, os, datetime, subprocess
           from pathlib import Path
 
+          # --------------------------------------------------
+          # Attempt to obtain REAL GodScore from your engine
+          # --------------------------------------------------
+          godscore = None
+          engine_details = {}
+
+          # Helper: clamp 0..100
+          def clamp(x):
+              try:
+                  x = float(x)
+              except Exception:
+                  return None
+              return max(0.0, min(100.0, x))
+
+          # OPTION A: Python function import
+          # If your repo has a function like: from godscore import compute_godscore
+          try:
+              try:
+                  from godscore import compute_godscore  # type: ignore
+                  val = compute_godscore()
+                  godscore = clamp(val)
+                  if godscore is not None:
+                      engine_details["source"] = "python_function:godscore.compute_godscore"
+              except Exception as e:
+                  engine_details["python_function_error"] = str(e)
+          except Exception as e:
+              engine_details["python_import_error"] = str(e)
+
+          # OPTION B: Run a script (common patterns)
+          # Tries a few likely filenames; if one exists and prints a number, we use it.
+          if godscore is None:
+              candidates = ["godscore.py", "gv_gate.py", "gv_gate", "godscore_ci.py"]
+              for cand in candidates:
+                  if Path(cand).exists():
+                      try:
+                          result = subprocess.run(
+                              ["python", cand],
+                              capture_output=True,
+                              text=True
+                          )
+                          engine_details["cli_candidate"] = cand
+                          engine_details["cli_returncode"] = result.returncode
+                          # Try to extract first reasonable number from stdout
+                          txt = (result.stdout or "") + "\n" + (result.stderr or "")
+                          import re
+                          m = re.search(r"(\d+(\.\d+)?)", txt)
+                          if result.returncode == 0 and m:
+                              godscore = clamp(m.group(1))
+                              engine_details["source"] = f"cli:{cand}"
+                              break
+                      except Exception as e:
+                          engine_details[f"cli_error_{cand}"] = str(e)
+
+          # OPTION C: Read JSON output file if it exists
+          # Looks for common filenames.
+          if godscore is None:
+              json_candidates = ["godscore.json", "godscore_report.json", "report.json", "baseline.json"]
+              for jc in json_candidates:
+                  if Path(jc).exists():
+                      try:
+                          data = json.loads(Path(jc).read_text())
+                          # common keys
+                          for key in ["godscore", "score", "GodScore", "GODSCORE"]:
+                              if key in data:
+                                  godscore = clamp(data[key])
+                                  if godscore is not None:
+                                      engine_details["source"] = f"json_file:{jc}:{key}"
+                                      break
+                          if godscore is not None:
+                              break
+                      except Exception as e:
+                          engine_details[f"json_error_{jc}"] = str(e)
+
+          # --------------------------------------------------
+          # Fallback (never lie, never break)
+          # --------------------------------------------------
+          if godscore is None:
+              # If we can't find the engine yet, show 0 and explain why in snapshot.json
+              godscore = 0.0
+              engine_details["fallback"] = "engine_not_detected_yet"
+              engine_details["next_fix"] = "Tell Carl where the engine outputs the score (file/command/json key)."
+
+          # Optional context from QA checks (kept for future UI breakdown)
           def read_int(path, default=1):
               try:
                   return int(Path(path).read_text().strip())
@@ -79,7 +162,6 @@ jobs:
           pytest_code = read_int("dashboard/data/pytest.code", 1)
           ruff_code   = read_int("dashboard/data/ruff.code", 1)
 
-          # Count ruff findings (rough but effective)
           ruff_findings = 0
           try:
               ruff_txt = Path("dashboard/data/ruff.out").read_text(errors="ignore")
@@ -87,21 +169,12 @@ jobs:
           except Exception:
               pass
 
-          # Simple scoring model (transparent + adjustable):
-          # Start at 100
-          # - tests failing: -40
-          # - each lint finding: -1 (cap -30)
-          score = 100
-          if pytest_code != 0:
-              score -= 40
-          score -= min(30, ruff_findings)
-          score = max(0, min(100, score))
-
-          snap = {
+          snapshot = {
               "ts": datetime.datetime.utcnow().isoformat() + "Z",
               "ref": os.environ.get("GITHUB_REF_NAME", "main"),
               "sha": (os.environ.get("GITHUB_SHA","")[:7]),
-              "godscore": score,
+              "godscore": godscore,
+              "engine": engine_details,
               "breakdown": {
                   "tests_ok": pytest_code == 0,
                   "ruff_ok": ruff_code == 0,
@@ -109,8 +182,8 @@ jobs:
               }
           }
 
-          Path("dashboard/data/snapshot.json").write_text(json.dumps(snap, indent=2))
-          print("snapshot:", snap)
+          Path("dashboard/data/snapshot.json").write_text(json.dumps(snapshot, indent=2))
+          print("snapshot:", snapshot)
           PY
 
       # 6) Append snapshot to history.json (keep last 200)
@@ -126,11 +199,9 @@ jobs:
           hist = json.loads(hist_path.read_text())
           snap = json.loads(snap_path.read_text())
 
-          # Avoid duplicates by sha
           if not any(x.get("sha") == snap.get("sha") for x in hist):
               hist.append(snap)
 
-          # Keep last 200
           hist = hist[-200:]
           hist_path.write_text(json.dumps(hist, indent=2))
           print("history entries:", len(hist))
