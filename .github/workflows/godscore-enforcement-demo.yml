@@ -1,0 +1,70 @@
+name: GodScore Enforcement Demo
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: ["main"]
+
+jobs:
+  demo:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout (this repo)
+        uses: actions/checkout@v4
+
+      # ------------------------------------------------------------------
+      # 1) FREE TIER DEMO: warn mode (should NEVER fail the build)
+      # ------------------------------------------------------------------
+      - name: GodScore (FREE / warn) — should continue
+        id: free_warn
+        uses: willshacklett/godscore-ci@v0.2.6
+        with:
+          # Use an intentionally low score for the demo
+          score: "0.30"
+          threshold: "0.80"
+          mode: "free"       # free => warn
+          enforce: "false"   # explicit
+
+      - name: Show FREE outputs
+        run: |
+          echo "FREE passed: ${{ steps.free_warn.outputs.passed }}"
+          echo "FREE effective_mode: ${{ steps.free_warn.outputs.effective_mode }}"
+          echo "FREE effective_threshold: ${{ steps.free_warn.outputs.effective_threshold }}"
+          echo "FREE provided_score: ${{ steps.free_warn.outputs.provided_score }}"
+
+      # ------------------------------------------------------------------
+      # 2) PAID TIER DEMO: enforce/fail mode (should FAIL if below threshold)
+      #    We wrap it with continue-on-error so the workflow can finish and
+      #    still show outputs + messages for screenshots.
+      # ------------------------------------------------------------------
+      - name: GodScore (PAID / enforce) — should fail enforcement
+        id: pro_fail
+        continue-on-error: true
+        uses: willshacklett/godscore-ci@v0.2.6
+        with:
+          score: "0.30"
+          threshold: "0.80"
+          mode: "pro"        # pro => fail
+          enforce: "true"    # explicit
+
+      - name: Show PAID outputs (even if enforcement failed)
+        run: |
+          echo "PAID passed: ${{ steps.pro_fail.outputs.passed }}"
+          echo "PAID effective_mode: ${{ steps.pro_fail.outputs.effective_mode }}"
+          echo "PAID effective_threshold: ${{ steps.pro_fail.outputs.effective_threshold }}"
+          echo "PAID provided_score: ${{ steps.pro_fail.outputs.provided_score }}"
+
+      # ------------------------------------------------------------------
+      # 3) Final step: Make the job fail if the pro run was supposed to fail
+      #    This produces the red X for the "paid enforcement" demo,
+      #    which is EXACTLY what you want for credibility.
+      # ------------------------------------------------------------------
+      - name: Force job failure if paid enforcement triggered
+        run: |
+          if [ "${{ steps.pro_fail.outputs.passed }}" = "false" ]; then
+            echo "✅ Paid enforcement correctly blocked the build."
+            exit 1
+          fi
+          echo "Unexpected: paid enforcement did not block."
+          exit 0
