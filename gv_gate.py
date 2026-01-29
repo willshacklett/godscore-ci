@@ -13,7 +13,14 @@ from typing import Any, Dict, List, Optional, Tuple
 DEFAULT_THRESHOLD = 0.80
 DEFAULT_CONFIG_PATH = ".godscore.yml"
 
-DEFAULT_MODE = "free"  # free | pro
+# Canonical modes (what the action.yml now uses)
+# warn = advisory (never fail)
+# fail = enforcement (fail build on violations)
+DEFAULT_MODE = "warn"  # warn | fail
+
+# Backward-compatible legacy modes
+LEGACY_FREE = "free"
+LEGACY_PRO = "pro"
 
 DEFAULT_HISTORY_WINDOW = 5
 DEFAULT_MAX_REGRESSION = 0.02  # allowed drop vs recent baseline average
@@ -23,7 +30,7 @@ DEFAULT_RUN_LOG = Path("gv_runs.jsonl")
 # Exit codes (kept stable & explicit)
 EXIT_OK = 0
 EXIT_BAD_INPUT = 2
-EXIT_PRO_TOKEN_MISSING = 3
+EXIT_PRO_TOKEN_MISSING = 3  # reserved (not used by warn/fail)
 EXIT_THRESHOLD_FAIL = 4
 EXIT_REGRESSION_FAIL = 5
 
@@ -39,13 +46,6 @@ def _now_iso() -> str:
 def _coerce_float(x: Any) -> Optional[float]:
     try:
         return float(x)
-    except Exception:
-        return None
-
-
-def _coerce_int(x: Any) -> Optional[int]:
-    try:
-        return int(x)
     except Exception:
         return None
 
@@ -115,19 +115,16 @@ def _append_jsonl(path: Path, obj: Dict[str, Any]) -> None:
         print("⚠️  Warning: could not write run history log.")
 
 
-def _compute_baseline(history: List[Dict[str, Any]], window: int, mode_filter: Optional[str] = None) -> Optional[float]:
+def _compute_baseline(history: List[Dict[str, Any]], window: int) -> Optional[float]:
     """
     Baseline = average score of last N entries that:
       - have a numeric 'score'
       - have 'threshold_pass' == True (so we compare against successful behavior)
-      - optionally match mode_filter ("free" or "pro")
     """
     scores: List[float] = []
     for item in reversed(history):
         if len(scores) >= window:
             break
-        if mode_filter and str(item.get("mode", "")).lower() != mode_filter.lower():
-            continue
 
         if item.get("threshold_pass") is not True:
             continue
@@ -180,15 +177,30 @@ def _write_step_summary(score: float, threshold: float, threshold_pass: bool,
         pass
 
 
+def _normalize_mode(raw: str) -> str:
+    """
+    Normalize modes to canonical: warn | fail
+    Accept legacy: free -> warn, pro -> fail
+    """
+    m = (raw or "").strip().lower()
+    if m in ("warn", "advisory"):
+        return "warn"
+    if m in ("fail", "enforce", "enforcement"):
+        return "fail"
+    if m == LEGACY_FREE:
+        return "warn"
+    if m == LEGACY_PRO:
+        return "fail"
+    # default safe
+    return DEFAULT_MODE
+
+
 # ----------------------------
 # Gate logic
 # ----------------------------
 
-def enforce_threshold(score: float, threshold: float) -> None:
-    if score < threshold:
-        print(f"❌ Gv score {score:.3f} is below threshold {threshold:.3f}.")
-        raise SystemExit(EXIT_THRESHOLD_FAIL)
-    print(f"✅ Threshold OK: {score:.3f} ≥ {threshold:.3f}")
+def threshold_check(score: float, threshold: float) -> bool:
+    return score >= threshold
 
 
 def regression_check(score: float, baseline: float, max_regression: float) -> Tuple[bool, float]:
@@ -209,12 +221,16 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--threshold", type=float, default=None, help="Override threshold. If omitted, read config.")
     parser.add_argument("--config", type=str, default=DEFAULT_CONFIG_PATH, help="Config file path (YAML).")
 
-    parser.add_argument("--mode", type=str, default=DEFAULT_MODE, choices=["free", "pro"], help="Run mode.")
-    parser.add_argument("--token", type=str, default=None, help="Pro token (optional). If mode=pro, required unless env GV_PRO_TOKEN set.")
+    # Canonical mode
+    parser.add_argument("--mode", type=str, default=DEFAULT_MODE,
+                        help="Run mode: warn (advisory) or fail (enforcement). Legacy: free/pro accepted.")
 
-    parser.add_argument("--history-window", type=int, default=DEFAULT_HISTORY_WINDOW, help="Number of recent successful runs for baseline.")
-    parser.add_argument("--max-regression", type=float, default=DEFAULT_MAX_REGRESSION, help="Allowed drop vs baseline average.")
-    parser.add_argument("--run-log", type=str, default=str(DEFAULT_RUN_LOG), help="Path to JSONL run history log.")
+    parser.add_argument("--history-window", type=int, default=DEFAULT_HISTORY_WINDOW,
+                        help="Number of recent successful runs for baseline.")
+    parser.add_argument("--max-regression", type=float, default=DEFAULT_MAX_REGRESSION,
+                        help="Allowed drop vs baseline average.")
+    parser.add_argument("--run-log", type=str, default=str(DEFAULT_RUN_LOG),
+                        help="Path to JSONL run history log.")
 
     args = parser.parse_args(argv)
 
@@ -229,16 +245,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     # Resolve threshold
     threshold = args.threshold if args.threshold is not None else resolve_threshold(args.config)
 
-    mode = (args.mode or "free").lower().strip()
+    mode = _normalize_mode(args.mode)
     history_window = max(1, int(args.history_window))
     max_regression = float(args.max_regression)
     run_log = Path(args.run_log)
-
-    # If PRO mode, require token
-    pro_token = args.token or os.getenv("GV_PRO_TOKEN")
-    if mode == "pro" and not pro_token:
-        print("❌ PRO mode requires a token. Provide --token or set env GV_PRO_TOKEN.")
-        return EXIT_PRO_TOKEN_MISSING
 
     # Load history for baseline
     history = _read_jsonl(run_log)
@@ -248,19 +258,25 @@ def main(argv: Optional[List[str]] = None) -> int:
     regression_pass: Optional[bool] = None
     regression_delta: Optional[float] = None
 
-    # ---- Threshold gate (always enforced) ----
-    try:
-        enforce_threshold(score, threshold)
-    except SystemExit as e:
+    # ---- Threshold gate ----
+    t_ok = threshold_check(score, threshold)
+    if t_ok:
+        print(f"✅ Threshold OK: {score:.3f} ≥ {threshold:.3f}")
+    else:
         threshold_pass = False
-        # Still log & summarize below, then exit with threshold code.
-        exit_code = int(getattr(e, "code", EXIT_THRESHOLD_FAIL))
-        _finalize(run_log, mode, score, threshold, threshold_pass,
-                  baseline, max_regression, regression_pass, regression_delta,
-                  exit_code)
-        return exit_code
+        print(f"⚠️  GodScore {score:.3f} is below threshold {threshold:.3f}.")
 
-    # ---- Regression check (free: warn; pro: fail) ----
+        if mode == "fail":
+            print("❌ Enforcement active: failing build due to low GodScore.")
+            exit_code = EXIT_THRESHOLD_FAIL
+            _finalize(run_log, mode, score, threshold, threshold_pass,
+                      baseline, max_regression, regression_pass, regression_delta,
+                      exit_code)
+            return exit_code
+        else:
+            print("ℹ️  Advisory mode: build allowed to continue (warning only).")
+
+    # ---- Regression check (warn: warn only; fail: hard fail) ----
     if baseline is None:
         print(f"ℹ️  Regression: not enough history yet (need up to {history_window} successful prior runs). Skipping.")
     else:
@@ -275,17 +291,17 @@ def main(argv: Optional[List[str]] = None) -> int:
                 f"⚠️  Regression detected: score {score:.3f} vs baseline {baseline:.3f} "
                 f"(delta {delta:+.3f}, allowed drop {max_regression:.3f})"
             )
-            if mode == "free":
-                # FREE: warn only
+
+            if mode == "warn":
                 print(msg)
-                print("ℹ️  FREE mode: regression is a warning (does not fail CI).")
+                print("ℹ️  Advisory mode: regression is a warning (does not fail CI).")
             else:
-                # PRO: hard fail
                 print("❌ " + msg.replace("⚠️  ", ""))
+                exit_code = EXIT_REGRESSION_FAIL
                 _finalize(run_log, mode, score, threshold, threshold_pass,
                           baseline, max_regression, regression_pass, regression_delta,
-                          EXIT_REGRESSION_FAIL)
-                return EXIT_REGRESSION_FAIL
+                          exit_code)
+                return exit_code
 
     _finalize(run_log, mode, score, threshold, threshold_pass,
               baseline, max_regression, regression_pass, regression_delta,
