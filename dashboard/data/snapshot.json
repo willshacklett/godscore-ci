@@ -1,14 +1,14 @@
 {
-  "ts": "2026-01-29T22:12:41.590891Z",
+  "ts": "2026-01-29T22:17:09.807793Z",
   "ref": "main",
-  "sha": "bb97351",
-  "godscore": 0.0,
+  "sha": "ad75001",
+  "godscore": 30.0,
   "engine": {
     "python_function_error": "cannot import name 'compute_godscore' from 'godscore' (/home/runner/work/godscore-ci/godscore-ci/godscore.py)",
     "cli_candidate": "gv_gate.py",
     "cli_returncode": 2,
-    "fallback": "engine_not_detected_yet",
-    "next_fix": "Tell Carl where the engine outputs the score (file/command/json key)."
+    "fallback": "qa_scaffold",
+    "note": "Engine not detected yet; using tests+lint derived score."
   },
   "breakdown": {
     "tests_ok": false,
