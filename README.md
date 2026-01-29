@@ -1,11 +1,17 @@
 [![GitHub Marketplace](https://img.shields.io/badge/Marketplace-GodScore%20CI-blue?logo=github)](https://github.com/marketplace/actions/godscore-ci)
 [![Latest Release](https://img.shields.io/github/v/release/willshacklett/godscore-ci)](https://github.com/willshacklett/godscore-ci/releases)
 
-# GodScore CI
+## GodScore CI
 
-A survivability-aware CI gate that detects long-term system risk before it reaches production.
+GodScore CI assigns a **single, explainable trust score (0–100)** to every commit.
 
-GodScore CI turns survivability signals into optional warnings or non-optional guardrails inside your CI pipeline.
+Unlike pass/fail CI checks, GodScore:
+- tracks **quality over time**
+- explains *why* the score moved
+- supports **governance, recovery, and survivability**
+
+🔎 **Live dashboard:**  
+https://willshacklett.github.io/godscore-ci/dashboard/
 
 ---
 
