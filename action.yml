@@ -9,14 +9,22 @@ branding:
   color: "blue"
 
 inputs:
+  # Primary score input (required)
   score:
-    description: "God Variable score to evaluate."
+    description: "God Variable score to evaluate (0.0–1.0 or 0–100 depending on your gate logic)."
     required: true
 
+  # Primary threshold input (kept as-is)
   threshold:
     description: "Minimum allowed Gv score."
     required: false
     default: "0.80"
+
+  # Friendly alias for threshold (optional; if set, overrides threshold)
+  min_score:
+    description: "Alias for threshold (minimum required score). If set, overrides threshold."
+    required: false
+    default: ""
 
   # Simple, explicit switch for enforcement (what people pay for)
   enforce:
@@ -24,7 +32,8 @@ inputs:
     required: false
     default: "false"
 
-  # Backward-compatible input (kept so existing users don't break)
+  # Backward-compatible mode input
+  # free => warn, pro => fail
   mode:
     description: "Execution mode: free (warn) or pro (fail)."
     required: false
@@ -39,11 +48,17 @@ inputs:
 outputs:
   passed:
     description: "Whether the Gv gate passed."
+  effective_mode:
+    description: "Effective mode used: warn or fail."
+  effective_threshold:
+    description: "Effective threshold used (min_score overrides threshold if provided)."
+  provided_score:
+    description: "Score provided to the gate."
 
 runs:
   using: "composite"
   steps:
-    # This ensures gv_gate.py exists even when the action is used from another repository.
+    # Ensure gv_gate.py exists even when the action is used from another repository.
     - name: Checkout GodScore CI action repo
       uses: actions/checkout@v4
       with:
@@ -69,27 +84,46 @@ runs:
       run: |
         set +e
 
-        # Decide behavior:
-        # - enforce=true OR mode=pro OR pro_token provided  => fail mode
-        # - otherwise                                      => warn mode
+        # Inputs
+        SCORE_INPUT="${{ inputs.score }}"
+        THRESHOLD_INPUT="${{ inputs.threshold }}"
+        MIN_SCORE_INPUT="${{ inputs.min_score }}"
         ENFORCE_INPUT="${{ inputs.enforce }}"
         MODE_INPUT="${{ inputs.mode }}"
         TOKEN_INPUT="${{ inputs.pro_token }}"
 
+        # Threshold: min_score overrides threshold if provided
+        EFFECTIVE_THRESHOLD="${THRESHOLD_INPUT}"
+        if [ -n "${MIN_SCORE_INPUT}" ]; then
+          EFFECTIVE_THRESHOLD="${MIN_SCORE_INPUT}"
+        fi
+
+        # Mode resolution:
+        # - enforce=true OR mode=pro OR pro_token provided => fail mode
+        # - otherwise                                    => warn mode
         EFFECTIVE_MODE="warn"
         if [ "${ENFORCE_INPUT}" = "true" ] || [ "${MODE_INPUT}" = "pro" ] || [ -n "${TOKEN_INPUT}" ]; then
           EFFECTIVE_MODE="fail"
         fi
 
+        echo "GodScore CI: score=${SCORE_INPUT} threshold=${EFFECTIVE_THRESHOLD} mode=${EFFECTIVE_MODE}"
+
         python godscore-ci/gv_gate.py \
-          --score "${{ inputs.score }}" \
-          --threshold "${{ inputs.threshold }}" \
+          --score "${SCORE_INPUT}" \
+          --threshold "${EFFECTIVE_THRESHOLD}" \
           --mode "${EFFECTIVE_MODE}"
 
         code=$?
+
+        # Outputs (for downstream steps)
         if [ $code -eq 0 ]; then
           echo "passed=true" >> "$GITHUB_OUTPUT"
         else
           echo "passed=false" >> "$GITHUB_OUTPUT"
         fi
+
+        echo "effective_mode=${EFFECTIVE_MODE}" >> "$GITHUB_OUTPUT"
+        echo "effective_threshold=${EFFECTIVE_THRESHOLD}" >> "$GITHUB_OUTPUT"
+        echo "provided_score=${SCORE_INPUT}" >> "$GITHUB_OUTPUT"
+
         exit $code
