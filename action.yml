@@ -18,11 +18,19 @@ inputs:
     required: false
     default: "0.80"
 
+  # Simple, explicit switch for enforcement (what people pay for)
+  enforce:
+    description: "Enable enforcement mode (fail the build if GodScore does not pass threshold)."
+    required: false
+    default: "false"
+
+  # Backward-compatible input (kept so existing users don't break)
   mode:
     description: "Execution mode: free (warn) or pro (fail)."
     required: false
     default: "free"
 
+  # Optional token (kept for future licensing / pro enablement)
   pro_token:
     description: "Optional Pro token. Pass secrets.GV_PRO_TOKEN to enable pro enforcement."
     required: false
@@ -60,10 +68,24 @@ runs:
         GV_PRO_TOKEN: ${{ inputs.pro_token }}
       run: |
         set +e
+
+        # Decide behavior:
+        # - enforce=true OR mode=pro OR pro_token provided  => fail mode
+        # - otherwise                                      => warn mode
+        ENFORCE_INPUT="${{ inputs.enforce }}"
+        MODE_INPUT="${{ inputs.mode }}"
+        TOKEN_INPUT="${{ inputs.pro_token }}"
+
+        EFFECTIVE_MODE="warn"
+        if [ "${ENFORCE_INPUT}" = "true" ] || [ "${MODE_INPUT}" = "pro" ] || [ -n "${TOKEN_INPUT}" ]; then
+          EFFECTIVE_MODE="fail"
+        fi
+
         python godscore-ci/gv_gate.py \
           --score "${{ inputs.score }}" \
           --threshold "${{ inputs.threshold }}" \
-          --mode "${{ inputs.mode }}"
+          --mode "${EFFECTIVE_MODE}"
+
         code=$?
         if [ $code -eq 0 ]; then
           echo "passed=true" >> "$GITHUB_OUTPUT"
