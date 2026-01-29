@@ -4,11 +4,12 @@ on:
   push:
     branches: ["main"]
     paths-ignore:
-      - "dashboard/data/history.json"   # prevents infinite loop when we commit history
+      - "dashboard/data/history.json"
+      - "dashboard/data/snapshot.json"
   workflow_dispatch: {}
 
 permissions:
-  contents: write     # needed to commit history.json
+  contents: write
   pages: write
   id-token: write
 
@@ -24,7 +25,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 1) Ensure history file exists
+      # 1) Ensure dashboard data folder + history exists
       - name: Ensure history.json
         run: |
           mkdir -p dashboard/data
@@ -32,26 +33,87 @@ jobs:
             echo "[]" > dashboard/data/history.json
           fi
 
-      # 2) Generate a snapshot (placeholder for now)
-      - name: Generate snapshot
+      # 2) Python runtime
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # 3) Install dependencies (repo deps + scoring tools)
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install pytest ruff
+
+      # 4) Run checks (non-blocking). We score from the results.
+      - name: Run checks (capture outputs)
+        run: |
+          set +e
+          mkdir -p dashboard/data
+
+          # --- pytest ---
+          pytest -q > dashboard/data/pytest.out 2>&1
+          echo $? > dashboard/data/pytest.code
+
+          # --- ruff ---
+          ruff check . > dashboard/data/ruff.out 2>&1
+          echo $? > dashboard/data/ruff.code
+
+          set -e
+          echo "Checks captured."
+
+      # 5) Generate snapshot.json (REAL score computed from checks)
+      - name: Generate snapshot (REAL score)
         run: |
           python - << 'PY'
           import json, os, datetime
-          score = 80  # TODO: wire to real godscore-ci output next step
+          from pathlib import Path
+
+          def read_int(path, default=1):
+              try:
+                  return int(Path(path).read_text().strip())
+              except Exception:
+                  return default
+
+          pytest_code = read_int("dashboard/data/pytest.code", 1)
+          ruff_code   = read_int("dashboard/data/ruff.code", 1)
+
+          # Count ruff findings (rough but effective)
+          ruff_findings = 0
+          try:
+              ruff_txt = Path("dashboard/data/ruff.out").read_text(errors="ignore")
+              ruff_findings = sum(1 for line in ruff_txt.splitlines() if line.strip())
+          except Exception:
+              pass
+
+          # Simple scoring model (transparent + adjustable):
+          # Start at 100
+          # - tests failing: -40
+          # - each lint finding: -1 (cap -30)
+          score = 100
+          if pytest_code != 0:
+              score -= 40
+          score -= min(30, ruff_findings)
+          score = max(0, min(100, score))
 
           snap = {
-            "ts": datetime.datetime.utcnow().isoformat() + "Z",
-            "ref": os.environ.get("GITHUB_REF_NAME", "main"),
-            "sha": os.environ.get("GITHUB_SHA", "")[:7],
-            "godscore": score
+              "ts": datetime.datetime.utcnow().isoformat() + "Z",
+              "ref": os.environ.get("GITHUB_REF_NAME", "main"),
+              "sha": (os.environ.get("GITHUB_SHA","")[:7]),
+              "godscore": score,
+              "breakdown": {
+                  "tests_ok": pytest_code == 0,
+                  "ruff_ok": ruff_code == 0,
+                  "ruff_findings": ruff_findings
+              }
           }
 
-          with open("dashboard/data/snapshot.json","w") as f:
-            json.dump(snap, f, indent=2)
+          Path("dashboard/data/snapshot.json").write_text(json.dumps(snap, indent=2))
           print("snapshot:", snap)
           PY
 
-      # 3) Append snapshot to history.json (keep last 200)
+      # 6) Append snapshot to history.json (keep last 200)
       - name: Append history
         run: |
           python - << 'PY'
@@ -64,16 +126,18 @@ jobs:
           hist = json.loads(hist_path.read_text())
           snap = json.loads(snap_path.read_text())
 
+          # Avoid duplicates by sha
           if not any(x.get("sha") == snap.get("sha") for x in hist):
-            hist.append(snap)
+              hist.append(snap)
 
+          # Keep last 200
           hist = hist[-200:]
           hist_path.write_text(json.dumps(hist, indent=2))
           print("history entries:", len(hist))
           PY
 
-      # 4) Commit history back to main (but only if actor isn't the bot)
-      - name: Commit history.json
+      # 7) Commit history + snapshot back to main (avoid bot loops)
+      - name: Commit dashboard data
         if: github.actor != 'github-actions[bot]'
         run: |
           git config user.name "github-actions[bot]"
@@ -82,12 +146,12 @@ jobs:
           git commit -m "Update GodScore dashboard data" || echo "No changes"
           git push || true
 
-      # 5) Upload the site for Pages (serve from repo root)
+      # 8) Upload site to Pages
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: .
 
-      # 6) Deploy
+      # 9) Deploy to Pages
       - name: Deploy to GitHub Pages
         uses: actions/deploy-pages@v4
