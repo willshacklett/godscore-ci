@@ -1,7 +1,7 @@
 {
-  "ts": "2026-01-29T22:45:42.760129Z",
+  "ts": "2026-01-29T22:49:32.967535Z",
   "ref": "main",
-  "sha": "022fb2b",
+  "sha": "1517f7f",
   "godscore": 30.0,
   "engine": {
     "python_function_error": "cannot import name 'compute_godscore' from 'godscore' (/home/runner/work/godscore-ci/godscore-ci/godscore.py)",
