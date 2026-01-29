@@ -1,3 +1,6 @@
+[![GitHub Marketplace](https://img.shields.io/badge/Marketplace-GodScore%20CI-blue?logo=github)](https://github.com/marketplace/actions/godscore-ci)
+[![Latest Release](https://img.shields.io/github/v/release/willshacklett/godscore-ci)](https://github.com/willshacklett/godscore-ci/releases)
+
 # GodScore CI
 
 A survivability-aware CI gate that detects long-term system risk **before** it reaches production.
@@ -36,6 +39,22 @@ Want to see GodScore CI work — or fail — immediately?
 ➡️ **[Minimal passing and failing examples](./examples)**
 
 Copy one file, commit, and watch CI decide whether the system survives.
+
+---
+
+---
+
+## Install in 30 Seconds
+
+Add this step to any GitHub Actions workflow:
+
+```yaml
+- name: GodScore CI
+  uses: willshacklett/godscore-ci@v0.2.5
+  with:
+    score: "0.75"
+    threshold: "0.70"
+    enforce: "false" # set true to enable enforcement
 
 ---
 
