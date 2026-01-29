@@ -1,184 +1,140 @@
-[![GitHub Marketplace](https://img.shields.io/badge/Marketplace-GodScore%20CI-blue?logo=github)](https://github.com/marketplace/actions/godscore-ci)
-[![Latest Release](https://img.shields.io/github/v/release/willshacklett/godscore-ci)](https://github.com/willshacklett/godscore-ci/releases)
+# GodScore CI
 
-## GodScore CI
+[![Live Dashboard](https://img.shields.io/badge/dashboard-live-blue)](https://willshacklett.github.io/godscore-ci/dashboard/)
+[![Enforcement Demo](https://github.com/willshacklett/godscore-ci/actions/workflows/godscore-enforcement-demo.yml/badge.svg)](https://github.com/willshacklett/godscore-ci/actions/workflows/godscore-enforcement-demo.yml)
+[![Dashboard Pages](https://github.com/willshacklett/godscore-ci/actions/workflows/godscore-dashboard.yml/badge.svg)](https://github.com/willshacklett/godscore-ci/actions/workflows/godscore-dashboard.yml)
 
 GodScore CI assigns a **single, explainable trust score (0–100)** to every commit.
 
-Unlike pass/fail CI checks, GodScore:
+Unlike traditional pass/fail CI checks, GodScore:
 - tracks **quality over time**
-- explains *why* the score moved
+- explains **why** the score moved
 - supports **governance, recovery, and survivability**
 
-🔎 **Live dashboard:**  
+Live dashboard:  
 https://willshacklett.github.io/godscore-ci/dashboard/
+
+---
+
+## Why GodScore
+
+Most CI systems answer one question:
+
+Did it pass?
+
+GodScore answers better ones:
+- Are we getting healthier or riskier over time?
+- What specifically caused this change?
+- Can we recover, and how fast?
+
+GodScore turns CI from a binary gate into a **trust signal with memory**.
+
+---
+
+## Enforcement demo
+
+GodScore CI runs in two modes:
+
+**Free (inform / warn)**
+- Prints guidance
+- Never blocks builds
+
+**Paid (enforce / fail)**
+- Can fail the build when trust drops below a threshold
+
+Example workflow usage:
+
+    - uses: willshacklett/godscore-ci@v0.2.6
+      with:
+        score: "0.30"
+        threshold: "0.80"
+        mode: "free"
+        enforce: "false"
+
+    - uses: willshacklett/godscore-ci@v0.2.6
+      with:
+        score: "0.30"
+        threshold: "0.80"
+        mode: "pro"
+        enforce: "true"
+
+**Free informs. Paid enforces.**
+
+The included *GodScore Enforcement Demo* workflow intentionally fails in enforcement mode to prove the gate blocks when GodScore is below threshold.
+
+---
+
+## Dashboard
+
+GodScore CI automatically publishes a live dashboard showing:
+- latest GodScore
+- historical trend
+- commit-level history
+- explanation of score changes
+- enforcement context
+
+The dashboard updates on every push via GitHub Actions.
 
 ---
 
 ## Pricing
 
-Free tier:
+**Free tier**
 - Generates a GodScore
-- Prints guidance in CI
+- Prints guidance in CI logs
+- Shows dashboard and history
 - Never blocks builds
 
-Paid tier ($10/month per repo):
-- Enables enforcement
-- Can fail the build when risk is too high
+**Paid tier ($10/month per repo)**
+- Enables enforcement mode
+- Can fail builds when trust drops too low
+- Designed for governance and policy use
 
-Free informs. Paid enforces.
-
----
-
-## Install in 30 Seconds
-
-Add this step to any GitHub Actions workflow:
-
-    - name: GodScore CI
-      uses: willshacklett/godscore-ci@v0.2.5
-      with:
-        score: "0.75"
-        threshold: "0.70"
-        enforce: "false"  # set true to enable enforcement
-
-Commit and push.
-GodScore CI will run automatically on every workflow execution.
+**Free informs. Paid enforces.**
 
 ---
 
-## Enforcement Mode
+## Inputs
 
-By default, GodScore CI runs in advisory mode and will not fail your build.
-
-When enforcement mode is enabled (paid tier), GodScore CI applies an opinionated default policy:
-
-- Fail the build if godscore < threshold
-
-This threshold is intentionally opinionated.
-A low GodScore indicates elevated systemic risk and should be reviewed before deployment.
-
-Enforcement is always an explicit opt-in.
+- **score** — GodScore to evaluate (0–1 or 0–100)
+- **threshold** — Minimum acceptable score
+- **min_score** — Alias for threshold
+- **mode** — free (warn) or pro (fail)
+- **enforce** — Explicit enforcement toggle
+- **pro_token** — Optional future-use token
 
 ---
 
-## Quick Start (5 minutes)
+## Outputs
 
-Want to see GodScore CI pass and fail immediately?
-
-See the ./examples directory for minimal passing and failing workflows.
-
-Copy one file, commit, and watch CI decide whether the system survives.
-
----
-
-## What Is GodScore CI?
-
-GodScore CI is a constraint-based Continuous Integration (CI) framework designed to detect irreversible or long-term degradation in evolving systems — issues that traditional CI pipelines often miss.
-
-Rather than asking:
-
-“Does this change work right now?”
-
-GodScore CI asks:
-
-“Does this change reduce the system’s ability to survive, recover, or self-correct over time?”
+- **passed** — Whether the gate passed
+- **effective_mode** — Resolved mode
+- **effective_threshold** — Threshold used
+- **provided_score** — Score evaluated
 
 ---
 
-## Core Concept: The God Variable (Gv)
+## Design philosophy
 
-At the heart of the framework is the God Variable (Gv) —
-a scalar metric intended to summarize a system’s survivability, self-correctability, and irreversibility risk.
-
-- Higher Gv → greater long-term resilience
-- Lower Gv → increased risk of silent degradation or irreversible failure
-
-The GodScore is the computed instantiation of Gv at a given point in time, evaluated before and after proposed changes.
-
-GodScore CI treats regressions in Gv as first-class failures, even when traditional tests pass.
+- Honesty over green lights
+- Trends matter more than snapshots
+- Governance is about recovery, not punishment
 
 ---
 
-## Why This Exists
+## Roadmap
 
-Modern systems often fail through:
-
-- Cumulative technical debt
-- Gradual erosion of recovery paths
-- Silent loss of reversibility
-- Optimization for short-term success at long-term cost
-
-Traditional CI pipelines are excellent at enforcing local correctness.
-GodScore CI extends this by enforcing global survivability constraints.
+- True GodScore engine integration
+- Component-level breakdowns
+- Organization-wide dashboards
+- Compliance exports
+- Enterprise licensing
 
 ---
 
-## How It Works
+## Author
 
-GodScore CI integrates into GitHub Actions and evaluates changes using:
+William Shacklett
 
-- Threshold checks to enforce minimum survivability levels
-- Regression awareness based on recent successful runs
-- Irreversibility detection
-- Clear CI step summaries
-
-If a change causes a meaningful regression in survivability, the CI gate responds based on configured strictness.
-
----
-
-## CI Gate Modes
-
-Free Mode (default):
-- Advisory warnings only
-- Ideal for experimentation and learning
-- Never blocks merges
-
-Enforcement Mode (paid):
-- Fails the build when survivability drops below threshold
-- Designed for high-stakes or long-lived systems
-- Makes risk non-optional
-
-If it blocks your build, that’s the signal.
-
----
-
-## GitHub Actions Usage
-
-Free (advisory):
-
-    - name: GodScore CI (Free)
-      uses: willshacklett/godscore-ci@v0.2.5
-      with:
-        score: "0.85"
-        threshold: "0.80"
-        enforce: "false"
-
-Enforcement (paid):
-
-    - name: GodScore CI (Enforced)
-      uses: willshacklett/godscore-ci@v0.2.5
-      with:
-        score: "0.62"
-        threshold: "0.70"
-        enforce: "true"
-
----
-
-## Governance & Survivability (Exploratory)
-
-In addition to detecting long-term system degradation in codebases,
-this project explores whether system-level decisions (product, monetization,
-policy) can be evaluated against survivability constraints.
-
-The governance/ directory contains non-functional, exploratory material.
-These materials do not affect CI behavior.
-
----
-
-## Status
-
-GodScore CI is actively evolving.
-
-Expect opinionated defaults, sharp edges, and gradual refinement.
-
-If it saves you from one irreversible mistake, it paid for itself.
+GodScore CI is not about stopping change.  
+It’s about surviving it.
