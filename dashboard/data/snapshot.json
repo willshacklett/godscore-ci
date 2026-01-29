@@ -1,7 +1,7 @@
 {
-  "ts": "2026-01-29T22:34:19.454136Z",
+  "ts": "2026-01-29T22:36:07.612326Z",
   "ref": "main",
-  "sha": "9346e2b",
+  "sha": "6c54678",
   "godscore": 30.0,
   "engine": {
     "python_function_error": "cannot import name 'compute_godscore' from 'godscore' (/home/runner/work/godscore-ci/godscore-ci/godscore.py)",
@@ -13,6 +13,6 @@
   "breakdown": {
     "tests_ok": false,
     "ruff_ok": false,
-    "ruff_findings": 72
+    "ruff_findings": 61
   }
 }
