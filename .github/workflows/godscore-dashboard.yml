@@ -46,37 +46,30 @@ jobs:
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           pip install pytest ruff
 
-      # 4) Run checks (non-blocking). We keep these for context + future breakdown.
+      # 4) Run checks (non-blocking). We score from results.
       - name: Run checks (capture outputs)
         run: |
           set +e
           mkdir -p dashboard/data
 
-          # --- pytest ---
           pytest -q > dashboard/data/pytest.out 2>&1
           echo $? > dashboard/data/pytest.code
 
-          # --- ruff ---
           ruff check . > dashboard/data/ruff.out 2>&1
           echo $? > dashboard/data/ruff.code
 
           set -e
           echo "Checks captured."
 
-      # 5) Generate snapshot.json using REAL GodScore engine (with safe fallbacks)
-      - name: Generate snapshot (GodScore engine)
+      # 5) Generate snapshot.json:
+      #    - Try REAL GodScore engine first
+      #    - If not detected, fallback to QA-derived score (tests+lint)
+      - name: Generate snapshot (engine-first, QA fallback)
         run: |
           python - << 'PY'
-          import json, os, datetime, subprocess
+          import json, os, datetime, subprocess, re
           from pathlib import Path
 
-          # --------------------------------------------------
-          # Attempt to obtain REAL GodScore from your engine
-          # --------------------------------------------------
-          godscore = None
-          engine_details = {}
-
-          # Helper: clamp 0..100
           def clamp(x):
               try:
                   x = float(x)
@@ -84,8 +77,28 @@ jobs:
                   return None
               return max(0.0, min(100.0, x))
 
+          def read_int(path, default=1):
+              try:
+                  return int(Path(path).read_text().strip())
+              except Exception:
+                  return default
+
+          # ---- QA context ----
+          pytest_code = read_int("dashboard/data/pytest.code", 1)
+          ruff_code   = read_int("dashboard/data/ruff.code", 1)
+
+          ruff_findings = 0
+          try:
+              ruff_txt = Path("dashboard/data/ruff.out").read_text(errors="ignore")
+              ruff_findings = sum(1 for line in ruff_txt.splitlines() if line.strip())
+          except Exception:
+              pass
+
+          # ---- Attempt REAL engine ----
+          godscore = None
+          engine_details = {}
+
           # OPTION A: Python function import
-          # If your repo has a function like: from godscore import compute_godscore
           try:
               try:
                   from godscore import compute_godscore  # type: ignore
@@ -98,10 +111,9 @@ jobs:
           except Exception as e:
               engine_details["python_import_error"] = str(e)
 
-          # OPTION B: Run a script (common patterns)
-          # Tries a few likely filenames; if one exists and prints a number, we use it.
+          # OPTION B: Known script candidates (if they exist)
           if godscore is None:
-              candidates = ["godscore.py", "gv_gate.py", "gv_gate", "godscore_ci.py"]
+              candidates = ["godscore.py", "gv_gate.py", "godscore_ci.py"]
               for cand in candidates:
                   if Path(cand).exists():
                       try:
@@ -112,26 +124,25 @@ jobs:
                           )
                           engine_details["cli_candidate"] = cand
                           engine_details["cli_returncode"] = result.returncode
-                          # Try to extract first reasonable number from stdout
+
                           txt = (result.stdout or "") + "\n" + (result.stderr or "")
-                          import re
+                          # Grab first number that looks like a score
                           m = re.search(r"(\d+(\.\d+)?)", txt)
                           if result.returncode == 0 and m:
                               godscore = clamp(m.group(1))
-                              engine_details["source"] = f"cli:{cand}"
-                              break
+                              if godscore is not None:
+                                  engine_details["source"] = f"cli:{cand}"
+                                  break
                       except Exception as e:
                           engine_details[f"cli_error_{cand}"] = str(e)
 
-          # OPTION C: Read JSON output file if it exists
-          # Looks for common filenames.
+          # OPTION C: JSON file candidates (if they exist)
           if godscore is None:
-              json_candidates = ["godscore.json", "godscore_report.json", "report.json", "baseline.json"]
+              json_candidates = ["godscore.json", "godscore_report.json", "report.json"]
               for jc in json_candidates:
                   if Path(jc).exists():
                       try:
                           data = json.loads(Path(jc).read_text())
-                          # common keys
                           for key in ["godscore", "score", "GodScore", "GODSCORE"]:
                               if key in data:
                                   godscore = clamp(data[key])
@@ -143,31 +154,21 @@ jobs:
                       except Exception as e:
                           engine_details[f"json_error_{jc}"] = str(e)
 
-          # --------------------------------------------------
-          # Fallback (never lie, never break)
-          # --------------------------------------------------
+          # ---- Fallback: QA-derived score (so we NEVER show useless 0) ----
           if godscore is None:
-              # If we can't find the engine yet, show 0 and explain why in snapshot.json
-              godscore = 0.0
-              engine_details["fallback"] = "engine_not_detected_yet"
-              engine_details["next_fix"] = "Tell Carl where the engine outputs the score (file/command/json key)."
+              # Simple, transparent scoring scaffold:
+              # Start at 100
+              # - tests failing: -40
+              # - each ruff finding: -1 (cap -30)
+              score = 100
+              if pytest_code != 0:
+                  score -= 40
+              score -= min(30, ruff_findings)
+              score = max(0, min(100, score))
 
-          # Optional context from QA checks (kept for future UI breakdown)
-          def read_int(path, default=1):
-              try:
-                  return int(Path(path).read_text().strip())
-              except Exception:
-                  return default
-
-          pytest_code = read_int("dashboard/data/pytest.code", 1)
-          ruff_code   = read_int("dashboard/data/ruff.code", 1)
-
-          ruff_findings = 0
-          try:
-              ruff_txt = Path("dashboard/data/ruff.out").read_text(errors="ignore")
-              ruff_findings = sum(1 for line in ruff_txt.splitlines() if line.strip())
-          except Exception:
-              pass
+              godscore = float(score)
+              engine_details["fallback"] = "qa_scaffold"
+              engine_details["note"] = "Engine not detected yet; using tests+lint derived score."
 
           snapshot = {
               "ts": datetime.datetime.utcnow().isoformat() + "Z",
