@@ -6,25 +6,41 @@
   <title>GodScore Dashboard</title>
   <style>
     body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; padding: 0; background: #0b0e14; color: #e7eaf0; }
-    header { padding: 20px 18px; border-bottom: 1px solid #1b2230; background: #0b0e14; position: sticky; top: 0; }
+    header { padding: 20px 18px; border-bottom: 1px solid #1b2230; background: #0b0e14; position: sticky; top: 0; z-index: 5; }
     .wrap { max-width: 980px; margin: 0 auto; }
     h1 { font-size: 18px; margin: 0 0 6px 0; letter-spacing: .2px; }
     .sub { color: #a8b3c7; font-size: 13px; }
     .grid { display: grid; grid-template-columns: 1fr; gap: 14px; padding: 18px; }
     .card { background: #0f1420; border: 1px solid #1b2230; border-radius: 12px; padding: 14px; }
-    .kpi { display: flex; align-items: baseline; gap: 10px; }
-    .kpi .score { font-size: 42px; font-weight: 700; }
+    .kpi { display: flex; align-items: baseline; gap: 12px; }
+    .kpi .score { font-size: 42px; font-weight: 750; letter-spacing: .3px; }
     .kpi .label { color: #a8b3c7; font-size: 13px; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { padding: 10px 8px; border-bottom: 1px solid #1b2230; font-size: 13px; }
-    th { text-align: left; color: #a8b3c7; font-weight: 600; }
-    .pill { display: inline-block; padding: 3px 8px; border-radius: 999px; border: 1px solid #1b2230; font-size: 12px; color: #a8b3c7; }
+    .muted { color:#a8b3c7; }
     .row { display:flex; gap:14px; flex-wrap: wrap; }
     .row .card { flex: 1 1 320px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 10px 8px; border-bottom: 1px solid #1b2230; font-size: 13px; }
+    th { text-align: left; color: #a8b3c7; font-weight: 650; }
+    code { color:#cbd5e1; }
     a { color: #8ab4ff; text-decoration: none; }
+
+    .pill { display: inline-flex; align-items:center; gap:6px; padding: 3px 9px; border-radius: 999px; border: 1px solid #1b2230; font-size: 12px; color: #a8b3c7; }
+    .dot { width:8px; height:8px; border-radius:999px; background:#6b7280; display:inline-block; }
+    .ok .dot { background:#22c55e; }
+    .warn .dot { background:#f59e0b; }
+    .bad .dot { background:#ef4444; }
+
+    .grade { font-weight: 800; font-size: 14px; letter-spacing:.4px; }
+    .gradeA { color:#22c55e; }
+    .gradeB { color:#a3e635; }
+    .gradeC { color:#f59e0b; }
+    .gradeD { color:#fb7185; }
+    .gradeF { color:#ef4444; }
+
+    .why { display:grid; grid-template-columns: 1fr; gap:10px; }
+    .why ul { margin:8px 0 0 18px; color:#cbd5e1; }
+    .why li { margin: 6px 0; }
     footer { padding: 18px; color:#a8b3c7; font-size: 12px; }
-    .muted { color:#a8b3c7; }
-    .delta { font-weight: 650; }
   </style>
 </head>
 <body>
@@ -37,6 +53,7 @@
 
   <main class="wrap">
     <div class="grid">
+
       <div class="row">
         <div class="card">
           <div class="kpi">
@@ -44,7 +61,10 @@
             <div>
               <div class="label">Latest GodScore</div>
               <div class="muted" id="latestMeta">—</div>
-              <div class="muted">Δ vs previous: <span class="delta" id="latestDelta">—</span></div>
+              <div class="muted">Δ vs previous: <span style="font-weight:750" id="latestDelta">—</span></div>
+              <div class="muted" style="margin-top:6px;">
+                Grade: <span class="grade" id="grade">—</span>
+              </div>
             </div>
           </div>
         </div>
@@ -52,18 +72,39 @@
         <div class="card">
           <div style="display:flex;justify-content:space-between;align-items:center;">
             <div>
-              <div style="font-weight:650;">Trend</div>
+              <div style="font-weight:700;">Trend</div>
               <div class="muted">Last 30 runs (or fewer)</div>
             </div>
-            <span class="pill" id="runCount">— runs</span>
+            <span class="pill" id="runCount"><span class="dot"></span>— runs</span>
           </div>
           <canvas id="chart" height="120"></canvas>
         </div>
       </div>
 
+      <div class="row">
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div style="font-weight:700;">Signals</div>
+            <span class="pill" id="enginePill"><span class="dot"></span>engine: —</span>
+          </div>
+          <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;">
+            <span class="pill" id="testsPill"><span class="dot"></span>tests: —</span>
+            <span class="pill" id="ruffPill"><span class="dot"></span>ruff: —</span>
+            <span class="pill" id="findingsPill"><span class="dot"></span>findings: —</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div style="font-weight:700;">Why did the score land here?</div>
+          <div class="why" id="whyBox">
+            <div class="muted">Loading…</div>
+          </div>
+        </div>
+      </div>
+
       <div class="card">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-          <div style="font-weight:650;">History</div>
+          <div style="font-weight:700;">History</div>
           <div class="muted">Newest first</div>
         </div>
         <table>
@@ -80,8 +121,9 @@
       </div>
 
       <footer>
-        <span class="muted">Next: wire the placeholder score to real godscore-ci output, then add component breakdown + thresholds.</span>
+        Next: wire **true GodScore engine output** as the canonical score (keep QA fallback), then add branch compare + badge.
       </footer>
+
     </div>
   </main>
 
@@ -98,22 +140,92 @@
       try { return new Date(ts).toISOString().replace(".000Z","Z"); } catch { return ts; }
     }
 
+    function gradeFor(score) {
+      if (score >= 90) return ["A", "gradeA"];
+      if (score >= 80) return ["B", "gradeB"];
+      if (score >= 70) return ["C", "gradeC"];
+      if (score >= 60) return ["D", "gradeD"];
+      return ["F", "gradeF"];
+    }
+
+    function pill(el, state, text) {
+      el.classList.remove("ok","warn","bad");
+      if (state) el.classList.add(state);
+      el.innerHTML = `<span class="dot"></span>${text}`;
+    }
+
+    function renderWhy(latest) {
+      const box = document.getElementById("whyBox");
+      const b = (latest && latest.breakdown) ? latest.breakdown : {};
+      const eng = (latest && latest.engine) ? latest.engine : {};
+      const reasons = [];
+
+      if (eng.fallback === "qa_scaffold") {
+        reasons.push("GodScore engine output wasn’t detected, so the dashboard used a QA-derived scaffold (tests + lint).");
+      } else if (eng.source) {
+        reasons.push(`Score source: ${eng.source}`);
+      }
+
+      if (b.tests_ok === false) reasons.push("Tests failed (big penalty). Fix failing tests to recover quickly.");
+      if (b.ruff_ok === false) reasons.push("Lint failed. Reduce ruff findings to climb steadily.");
+      if (typeof b.ruff_findings === "number" && b.ruff_findings > 0) reasons.push(`Ruff findings: ${b.ruff_findings} (each finding reduces score up to a cap).`);
+
+      if (reasons.length === 0) {
+        reasons.push("No breakdown details available yet. (This will improve as we wire more signals.)");
+      }
+
+      box.innerHTML = `
+        <ul>
+          ${reasons.map(r => `<li>${r}</li>`).join("")}
+        </ul>
+      `;
+    }
+
     function render(history) {
       history = history.slice().sort((a,b) => (a.ts < b.ts ? -1 : 1)); // ascending
       const latest = history[history.length - 1];
       const prev = history[history.length - 2];
 
-      document.getElementById("runCount").textContent = `${history.length} runs`;
+      pill(document.getElementById("runCount"), null, `${history.length} runs`);
 
       if (latest) {
-        document.getElementById("latestScore").textContent = latest.godscore ?? "--";
-        document.getElementById("latestMeta").innerHTML = `${fmtTs(latest.ts)} • <span class="pill">${latest.ref ?? "main"}</span> • <span class="pill">${latest.sha ?? ""}</span>`;
-        if (prev && typeof latest.godscore === "number" && typeof prev.godscore === "number") {
+        const score = (typeof latest.godscore === "number") ? latest.godscore : parseFloat(latest.godscore);
+        document.getElementById("latestScore").textContent = isNaN(score) ? "--" : score.toFixed(0);
+
+        document.getElementById("latestMeta").innerHTML =
+          `${fmtTs(latest.ts)} • <span class="pill"><span class="dot"></span>${latest.ref ?? "main"}</span> • <span class="pill"><span class="dot"></span>${latest.sha ?? ""}</span>`;
+
+        if (prev && typeof prev.godscore === "number" && typeof latest.godscore === "number") {
           const d = latest.godscore - prev.godscore;
           document.getElementById("latestDelta").textContent = (d >= 0 ? "+" : "") + d.toFixed(0);
         } else {
           document.getElementById("latestDelta").textContent = "—";
         }
+
+        if (!isNaN(score)) {
+          const [g, cls] = gradeFor(score);
+          const gEl = document.getElementById("grade");
+          gEl.textContent = g;
+          gEl.className = "grade " + cls;
+        }
+
+        // Signals pills
+        const b = latest.breakdown || {};
+        const eng = latest.engine || {};
+
+        if (eng.source) pill(document.getElementById("enginePill"), "ok", `engine: ${eng.source}`);
+        else if (eng.fallback) pill(document.getElementById("enginePill"), "warn", `engine: ${eng.fallback}`);
+        else pill(document.getElementById("enginePill"), "warn", "engine: unknown");
+
+        pill(document.getElementById("testsPill"), (b.tests_ok ? "ok" : "bad"), `tests: ${b.tests_ok ? "pass" : "fail"}`);
+        pill(document.getElementById("ruffPill"), (b.ruff_ok ? "ok" : "warn"), `ruff: ${b.ruff_ok ? "clean" : "issues"}`);
+
+        const f = (typeof b.ruff_findings === "number") ? b.ruff_findings : null;
+        if (f === 0) pill(document.getElementById("findingsPill"), "ok", "findings: 0");
+        else if (typeof f === "number") pill(document.getElementById("findingsPill"), "warn", `findings: ${f}`);
+        else pill(document.getElementById("findingsPill"), "warn", "findings: —");
+
+        renderWhy(latest);
       }
 
       // Table newest first
@@ -159,7 +271,7 @@
         const history = await loadHistory();
         render(history);
       } catch (e) {
-        document.getElementById("latestMeta").textContent = "No history yet. Push to main to generate the first entry.";
+        document.getElementById("whyBox").innerHTML = `<div class="muted">No history yet. Push to main to generate entries.</div>`;
         console.error(e);
       }
     })();
