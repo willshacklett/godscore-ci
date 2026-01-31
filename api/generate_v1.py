@@ -6,10 +6,12 @@ Minimal generator for godscore-ci API v1 output.
 - Reads a base template JSON (schema/example)
 - Injects context from env vars (GitHub Actions-friendly)
 - Optionally reads signals from a JSON file (GODSCORE_SIGNALS_PATH)
-- Emits baseline machine-readable explanations (outputs.explanations[])
-- Emits baseline machine-readable evidence (outputs.evidence[])
-- Emits stable metrics (outputs.metrics)
-- Writes a fully-formed v1 output JSON
+- Optionally reads declared policies from a JSON file (GODSCORE_POLICY_PATH)
+- Emits:
+  - outputs.explanations[] (machine-readable)
+  - outputs.evidence[] (proof pointers)
+  - outputs.metrics{} (stable aggregates)
+  - outputs.metrics.chi_* (Constraint Honesty pre-metrics)
 """
 
 from __future__ import annotations
@@ -21,11 +23,11 @@ from datetime import datetime, timezone
 from typing import Any, Dict
 
 
-def load_json(path: str) -> Dict[str, Any]:
+def load_json_obj(path: str) -> Dict[str, Any]:
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
     if not isinstance(data, dict):
-        raise ValueError("template root must be a JSON object")
+        raise ValueError("root must be a JSON object")
     return data
 
 
@@ -45,23 +47,32 @@ def env(name: str, default: str = "") -> str:
 
 
 def load_signals(path: str) -> list[dict[str, Any]]:
-    """
-    Loads signals from a JSON file shaped like:
-      { "version": "1.0.0", "signals": [ ... ] }
+    if not path:
+        return []
+    try:
+        data = load_json_obj(path)
+        if isinstance(data.get("signals"), list):
+            return [s for s in data["signals"] if isinstance(s, dict)]
+    except FileNotFoundError:
+        return []
+    except Exception:
+        return []
+    return []
 
-    Returns [] if missing or invalid (generator stays resilient).
+
+def load_policies(path: str) -> list[dict[str, Any]]:
+    """
+    Loads declared policies from:
+      { "version": "1.0.0", "policies": [ ... ] }
+
+    Returns [] if missing or invalid.
     """
     if not path:
         return []
     try:
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        if isinstance(data, dict) and isinstance(data.get("signals"), list):
-            out: list[dict[str, Any]] = []
-            for s in data["signals"]:
-                if isinstance(s, dict):
-                    out.append(s)
-            return out
+        data = load_json_obj(path)
+        if isinstance(data.get("policies"), list):
+            return [p for p in data["policies"] if isinstance(p, dict)]
     except FileNotFoundError:
         return []
     except Exception:
@@ -79,9 +90,6 @@ def _signal_ids(signals: list[dict[str, Any]]) -> list[str]:
 
 
 def compute_metrics(signals: list[dict[str, Any]]) -> dict[str, Any]:
-    """
-    First stable metrics. No scoring yet.
-    """
     by_sev = {
         "info": 0,
         "low": 0,
@@ -107,12 +115,49 @@ def compute_metrics(signals: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def baseline_explanations(signals: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def compute_chi_metrics(policies: list[dict[str, Any]], evidence: list[dict[str, Any]]) -> dict[str, Any]:
     """
-    Machine-readable explanations. IDs must remain stable.
+    Constraint Honesty pre-metrics:
+    - declared policies count
+    - enforced policies count (based on evidence matches)
+    - drift count and ratio
     """
+    policy_count = len(policies)
+
+    # Build a quick index of evidence entries by (kind, locator)
+    ev_index = set()
+    for ev in evidence:
+        kind = ev.get("kind")
+        locator = ev.get("locator")
+        if isinstance(kind, str) and isinstance(locator, str):
+            ev_index.add((kind, locator))
+
+    enforced = 0
+    drifted: list[str] = []
+
+    for p in policies:
+        pid = p.get("id") if isinstance(p.get("id"), str) else "unknown"
+        ek = p.get("evidence_kind")
+        el = p.get("evidence_locator")
+        if isinstance(ek, str) and isinstance(el, str) and (ek, el) in ev_index:
+            enforced += 1
+        else:
+            drifted.append(pid)
+
+    drift_count = policy_count - enforced
+    ratio = enforced / (policy_count if policy_count > 0 else 1)
+
+    return {
+        "chi_policy_count": policy_count,
+        "chi_enforced_count": enforced,
+        "chi_drift_count": drift_count,
+        "chi_ratio": ratio,
+        "chi_drift_policy_ids": drifted
+    }
+
+
+def baseline_explanations(signals: list[dict[str, Any]], chi: dict[str, Any]) -> list[dict[str, Any]]:
     signal_ids = _signal_ids(signals)
-    metrics = compute_metrics(signals)
 
     return [
         {
@@ -128,7 +173,7 @@ def baseline_explanations(signals: list[dict[str, Any]]) -> list[dict[str, Any]]
             "kind": "system",
             "severity": "info",
             "message": "Signals ingested into inputs.signals.",
-            "details": {"signal_count": metrics["signal_count"]},
+            "details": {"signal_count": len(signals)},
             "signals": signal_ids
         },
         {
@@ -146,15 +191,24 @@ def baseline_explanations(signals: list[dict[str, Any]]) -> list[dict[str, Any]]
             "message": "Enforcement is not applied by this generator.",
             "details": {"enforcement": "disabled"},
             "signals": []
+        },
+        {
+            "id": "explain.chi.premetric",
+            "kind": "compliance",
+            "severity": "info",
+            "message": "CHI pre-metrics computed from declared policies vs enforcement evidence.",
+            "details": {
+                "chi_policy_count": chi.get("chi_policy_count", 0),
+                "chi_enforced_count": chi.get("chi_enforced_count", 0),
+                "chi_drift_count": chi.get("chi_drift_count", 0),
+                "chi_ratio": chi.get("chi_ratio", 0.0)
+            },
+            "signals": []
         }
     ]
 
 
-def baseline_evidence(signals: list[dict[str, Any]], signals_path: str) -> list[dict[str, Any]]:
-    """
-    Evidence is proof pointers — files/urls/artifacts/metrics that back explanations.
-    Keep minimal + stable in v1.
-    """
+def baseline_evidence(signals: list[dict[str, Any]], signals_path: str, policy_path: str) -> list[dict[str, Any]]:
     signal_ids = _signal_ids(signals)
     metrics = compute_metrics(signals)
 
@@ -197,6 +251,33 @@ def baseline_evidence(signals: list[dict[str, Any]], signals_path: str) -> list[
             }
         )
 
+    # Evidence: declared policies file (if present)
+    if policy_path:
+        evidence.append(
+            {
+                "id": "evidence.policies.file",
+                "kind": "file",
+                "source": "repo",
+                "locator": policy_path,
+                "summary": "Declared policies used for CHI pre-metrics.",
+                "details": {},
+                "signals": []
+            }
+        )
+
+    # Evidence: enforcement proof — API contract check exists (hard-coded, stable)
+    evidence.append(
+        {
+            "id": "evidence.enforcement.api_contract_check",
+            "kind": "ci_check",
+            "source": "ci",
+            "locator": "API Contract (v1)",
+            "summary": "CI validates output against API v1 contract.",
+            "details": {},
+            "signals": []
+        }
+    )
+
     return evidence
 
 
@@ -206,7 +287,7 @@ def main(argv: list[str]) -> int:
         return 1
 
     template_path, output_path = argv[1], argv[2]
-    data = load_json(template_path)
+    data = load_json_obj(template_path)
 
     repo = env("GITHUB_REPOSITORY", data.get("context", {}).get("repo", ""))
     ref = env("GITHUB_REF", data.get("context", {}).get("ref", ""))
@@ -215,6 +296,9 @@ def main(argv: list[str]) -> int:
 
     signals_path = env("GODSCORE_SIGNALS_PATH", "")
     signals = load_signals(signals_path) if signals_path else []
+
+    policy_path = env("GODSCORE_POLICY_PATH", "api/policy.v1.json")
+    policies = load_policies(policy_path)
 
     # Fill timestamps + context
     data["generated_at"] = iso_utc_now()
@@ -233,11 +317,18 @@ def main(argv: list[str]) -> int:
     data.setdefault("inputs", {})
     data["inputs"]["signals"] = signals
 
-    # Outputs: explanations + evidence + metrics (stable structures)
+    # Outputs: evidence first (so CHI can reference it)
     data.setdefault("outputs", {})
-    data["outputs"]["explanations"] = baseline_explanations(signals)
-    data["outputs"]["evidence"] = baseline_evidence(signals, signals_path)
-    data["outputs"]["metrics"] = compute_metrics(signals)
+    evidence = baseline_evidence(signals, signals_path, policy_path)
+    chi = compute_chi_metrics(policies, evidence)
+
+    # Explanations + metrics
+    data["outputs"]["explanations"] = baseline_explanations(signals, chi)
+    data["outputs"]["evidence"] = evidence
+
+    metrics = compute_metrics(signals)
+    metrics.update(chi)  # merge CHI pre-metrics into outputs.metrics
+    data["outputs"]["metrics"] = metrics
 
     save_json(output_path, data)
     print(f"[ok] wrote {output_path}")
