@@ -121,8 +121,8 @@ def baseline_explanations(signals: list[dict[str, Any]]) -> list[dict[str, Any]]
 
 def baseline_evidence(signals: list[dict[str, Any]], signals_path: str) -> list[dict[str, Any]]:
     """
-    Evidence is 'proof pointers' — files/urls/artifacts/metrics that back explanations.
-    Keep it minimal and stable in v1.
+    Evidence is proof pointers — files/urls/artifacts/metrics that back explanations.
+    Keep minimal + stable in v1.
     """
     signal_ids = _signal_ids(signals)
 
@@ -205,7 +205,6 @@ def main(argv: list[str]) -> int:
 
     # Outputs: explanations + evidence (stable structures)
     data.setdefault("outputs", {})
-
     data["outputs"]["explanations"] = baseline_explanations(signals)
     data["outputs"]["evidence"] = baseline_evidence(signals, signals_path)
 
