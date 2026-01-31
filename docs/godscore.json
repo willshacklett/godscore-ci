@@ -1,0 +1,44 @@
+{
+  "attestation_version": "v1",
+  "producer": "godscore-ci",
+  "generated_at": "2026-01-31T20:01:23Z",
+  "source": {
+    "repo": "example/repo",
+    "ref": "refs/heads/main",
+    "sha": "0000000000000000000000000000000000000000",
+    "run_id": "local"
+  },
+  "result": {
+    "score": 0,
+    "grade": "UNKNOWN",
+    "threshold": 0,
+    "pass": false
+  },
+  "metrics": {
+    "chi_status": "unknown",
+    "chi_ratio": 0.0,
+    "chi_drift_count": 0,
+    "chi_drift_policy_ids": [],
+    "chi_drift_by_tier": {},
+    "chi_max_drift_tier": 0,
+    "chi_enforced_tiers": [
+      2,
+      3
+    ]
+  },
+  "links": {
+    "dashboard": "/",
+    "attestation": "/.well-known/godscore.json",
+    "signature": "/.well-known/godscore.sig"
+  },
+  "meta": {
+    "api_version": "1.0.0"
+  },
+  "signature": {
+    "alg": "HMAC-SHA256",
+    "encoding": "base64",
+    "value": "vsLKnJMXGMWf/0x0HTORBac9SysH8VAcDHDwkgxR/WQ=",
+    "signed_at": "2026-01-31T20:01:23Z",
+    "key_id": "github-actions-secret:v1"
+  }
+}
