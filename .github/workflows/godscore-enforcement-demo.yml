@@ -1,70 +1,65 @@
-name: GodScore Enforcement Demo
+name: GodScore Enforcement Demo (Intentional Failure)
 
 on:
-  workflow_dispatch: {}
   push:
-    branches: ["main"]
+  pull_request:
 
 jobs:
-  demo:
+  enforcement-demo:
     runs-on: ubuntu-latest
 
+    # This is a DEMO job.
+    # Its failure is intentional and should never block real CI.
+    continue-on-error: true
+
     steps:
-      - name: Checkout (this repo)
+      - name: Checkout
         uses: actions/checkout@v4
 
-      # ------------------------------------------------------------------
-      # 1) FREE TIER DEMO: warn mode (should NEVER fail the build)
-      # ------------------------------------------------------------------
-      - name: GodScore (FREE / warn) — should continue
-        id: free_warn
-        uses: willshacklett/godscore-ci@v0.2.6
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          # Use an intentionally low score for the demo
-          score: "0.30"
-          threshold: "0.80"
-          mode: "free"       # free => warn
-          enforce: "false"   # explicit
+          python-version: "3.11"
 
-      - name: Show FREE outputs
+      - name: Generate demo signals
         run: |
-          echo "FREE passed: ${{ steps.free_warn.outputs.passed }}"
-          echo "FREE effective_mode: ${{ steps.free_warn.outputs.effective_mode }}"
-          echo "FREE effective_threshold: ${{ steps.free_warn.outputs.effective_threshold }}"
-          echo "FREE provided_score: ${{ steps.free_warn.outputs.provided_score }}"
+          mkdir -p api/out
+          cat > api/demo_signals.v1.json <<'EOF'
+          {
+            "version": "1.0.0",
+            "signals": [
+              {
+                "id": "demo.constraint.violation",
+                "type": "compliance",
+                "severity": "high",
+                "source": "demo",
+                "ts": "2026-01-31T00:00:00Z",
+                "message": "Intentional demo violation to trigger enforcement",
+                "meta": {
+                  "demo": true
+                }
+              }
+            ]
+          }
+          EOF
 
-      # ------------------------------------------------------------------
-      # 2) PAID TIER DEMO: enforce/fail mode (should FAIL if below threshold)
-      #    We wrap it with continue-on-error so the workflow can finish and
-      #    still show outputs + messages for screenshots.
-      # ------------------------------------------------------------------
-      - name: GodScore (PAID / enforce) — should fail enforcement
-        id: pro_fail
-        continue-on-error: true
-        uses: willshacklett/godscore-ci@v0.2.6
-        with:
-          score: "0.30"
-          threshold: "0.80"
-          mode: "pro"        # pro => fail
-          enforce: "true"    # explicit
-
-      - name: Show PAID outputs (even if enforcement failed)
+      - name: Generate v1 output (demo mode)
+        env:
+          GODSCORE_SIGNALS_PATH: api/demo_signals.v1.json
+          GODSCORE_DEMO_MODE: "true"
         run: |
-          echo "PAID passed: ${{ steps.pro_fail.outputs.passed }}"
-          echo "PAID effective_mode: ${{ steps.pro_fail.outputs.effective_mode }}"
-          echo "PAID effective_threshold: ${{ steps.pro_fail.outputs.effective_threshold }}"
-          echo "PAID provided_score: ${{ steps.pro_fail.outputs.provided_score }}"
+          python api/generate_v1.py api/example_output.v1.json api/out/godscore.output.v1.json
+          cat api/out/godscore.output.v1.json
 
-      # ------------------------------------------------------------------
-      # 3) Final step: Make the job fail if the pro run was supposed to fail
-      #    This produces the red X for the "paid enforcement" demo,
-      #    which is EXACTLY what you want for credibility.
-      # ------------------------------------------------------------------
-      - name: Force job failure if paid enforcement triggered
+      - name: Validate v1 output against contract
         run: |
-          if [ "${{ steps.pro_fail.outputs.passed }}" = "false" ]; then
-            echo "✅ Paid enforcement correctly blocked the build."
-            exit 1
-          fi
-          echo "Unexpected: paid enforcement did not block."
-          exit 0
+          python api/validate_v1.py api/schema.v1.json api/out/godscore.output.v1.json
+
+      - name: Intentional enforcement failure
+        run: |
+          echo "---------------------------------------------"
+          echo "This job FAILS ON PURPOSE."
+          echo "It demonstrates enforcement when constraints"
+          echo "are violated."
+          echo "---------------------------------------------"
+          exit 1
