@@ -33,8 +33,6 @@
       "chi_status": "unknown",
       "chi_thresholds": {},
       "chi_drift_policy_ids": [],
-
-      // 🔹 STEP 19 — Tier-aware exports
       "chi_drift_by_tier": {},
       "chi_max_drift_tier": 0,
       "chi_enforced_tiers": []
