@@ -1,0 +1,14 @@
+{
+  "version": "1.0.0",
+  "signals": [
+    {
+      "id": "tests.passed",
+      "type": "quality",
+      "severity": "info",
+      "source": "ci",
+      "ts": "2026-01-31T00:00:00Z",
+      "message": "All tests passed",
+      "meta": { "count": 128 }
+    }
+  ]
+}
