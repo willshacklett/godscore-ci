@@ -14,6 +14,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # ------------------------------------------------------------
+      # Build attestation from main
+      # ------------------------------------------------------------
       - name: Checkout main
         uses: actions/checkout@v4
         with:
@@ -39,8 +42,13 @@ jobs:
           GODSCORE_ATTESTATION_HMAC: ${{ secrets.GODSCORE_ATTESTATION_HMAC }}
         run: |
           mkdir -p attestation
-          python api/build_attestation.py api/out/godscore.output.v1.json attestation/godscore.json
+          python api/build_attestation.py \
+            api/out/godscore.output.v1.json \
+            attestation/godscore.json
 
+      # ------------------------------------------------------------
+      # Keyless Sigstore signing
+      # ------------------------------------------------------------
       - name: Install cosign
         uses: sigstore/cosign-installer@v3
 
@@ -50,15 +58,19 @@ jobs:
             --bundle attestation/godscore.sigstore.json \
             attestation/godscore.json
 
-      # ✅ Save the files to runner temp so branch switching doesn't lose them
-      - name: Stage attestation files for publishing
+      # ------------------------------------------------------------
+      # Preserve artifacts across branch switch
+      # ------------------------------------------------------------
+      - name: Stage attestation files
         run: |
           mkdir -p "$RUNNER_TEMP/godscore_att"
           cp attestation/godscore.json "$RUNNER_TEMP/godscore_att/godscore.json"
           cp attestation/godscore.json.sig "$RUNNER_TEMP/godscore_att/godscore.sig"
           cp attestation/godscore.sigstore.json "$RUNNER_TEMP/godscore_att/godscore.sigstore.json"
 
-      # ✅ Checkout gh-pages WITHOUT overwriting the dashboard
+      # ------------------------------------------------------------
+      # Publish into gh-pages WITHOUT touching dashboard
+      # ------------------------------------------------------------
       - name: Checkout gh-pages (create if missing)
         run: |
           git fetch origin gh-pages || true
@@ -69,15 +81,15 @@ jobs:
             git rm -rf .
           fi
 
-      # ✅ Copy files into the Pages root so URLs work exactly as designed
-      - name: Publish to .well-known on GitHub Pages
+      - name: Publish attestation to .well-known
         run: |
           mkdir -p .well-known
+
           cp "$RUNNER_TEMP/godscore_att/godscore.json" .well-known/godscore.json
           cp "$RUNNER_TEMP/godscore_att/godscore.sig" .well-known/godscore.sig
           cp "$RUNNER_TEMP/godscore_att/godscore.sigstore.json" .well-known/godscore.sigstore.json
 
-          # Optional convenience copies (non-standard but handy)
+          # Convenience copies at site root
           cp "$RUNNER_TEMP/godscore_att/godscore.json" godscore.json
           cp "$RUNNER_TEMP/godscore_att/godscore.sig" godscore.sig
           cp "$RUNNER_TEMP/godscore_att/godscore.sigstore.json" godscore.sigstore.json
@@ -86,6 +98,12 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add .well-known/godscore.json .well-known/godscore.sig .well-known/godscore.sigstore.json godscore.json godscore.sig godscore.sigstore.json
+          git add \
+            .well-known/godscore.json \
+            .well-known/godscore.sig \
+            .well-known/godscore.sigstore.json \
+            godscore.json \
+            godscore.sig \
+            godscore.sigstore.json
           git commit -m "chore: publish godscore attestation (.well-known + sigstore)" || echo "No changes to commit"
           git push origin gh-pages
