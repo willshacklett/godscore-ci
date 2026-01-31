@@ -1,7 +1,7 @@
 {
   "attestation_version": "v1",
   "producer": "godscore-ci",
-  "generated_at": "2026-01-31T20:01:23Z",
+  "generated_at": "2026-01-31T20:05:00Z",
   "source": {
     "repo": "example/repo",
     "ref": "refs/heads/main",
@@ -37,8 +37,8 @@
   "signature": {
     "alg": "HMAC-SHA256",
     "encoding": "base64",
-    "value": "vsLKnJMXGMWf/0x0HTORBac9SysH8VAcDHDwkgxR/WQ=",
-    "signed_at": "2026-01-31T20:01:23Z",
+    "value": "b0hKIDfP577+sPFhyfzgzbHEA1TrtcaIe2sIUnPtAgI=",
+    "signed_at": "2026-01-31T20:05:01Z",
     "key_id": "github-actions-secret:v1"
   }
 }
