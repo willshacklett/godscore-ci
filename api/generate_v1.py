@@ -11,7 +11,7 @@ Minimal generator for godscore-ci API v1 output.
   - outputs.explanations[] (machine-readable)
   - outputs.evidence[] (proof pointers)
   - outputs.metrics{} (stable aggregates)
-  - outputs.metrics.chi_* (Constraint Honesty pre-metrics)
+  - outputs.metrics.chi_* (Constraint Honesty metrics + status)
 """
 
 from __future__ import annotations
@@ -64,8 +64,6 @@ def load_policies(path: str) -> list[dict[str, Any]]:
     """
     Loads declared policies from:
       { "version": "1.0.0", "policies": [ ... ] }
-
-    Returns [] if missing or invalid.
     """
     if not path:
         return []
@@ -115,16 +113,18 @@ def compute_metrics(signals: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def chi_status(chi_policy_count: int, chi_ratio: float, honest_threshold: float) -> str:
+    if chi_policy_count <= 0:
+        return "unknown"
+    if chi_ratio >= honest_threshold:
+        return "honest"
+    return "drifting"
+
+
 def compute_chi_metrics(policies: list[dict[str, Any]], evidence: list[dict[str, Any]]) -> dict[str, Any]:
-    """
-    Constraint Honesty pre-metrics:
-    - declared policies count
-    - enforced policies count (based on evidence matches)
-    - drift count and ratio
-    """
     policy_count = len(policies)
 
-    # Build a quick index of evidence entries by (kind, locator)
+    # Evidence index by (kind, locator)
     ev_index = set()
     for ev in evidence:
         kind = ev.get("kind")
@@ -147,65 +147,21 @@ def compute_chi_metrics(policies: list[dict[str, Any]], evidence: list[dict[str,
     drift_count = policy_count - enforced
     ratio = enforced / (policy_count if policy_count > 0 else 1)
 
+    # Status thresholds (v1 defaults)
+    thresholds = {
+        "honest_ratio_gte": 0.90
+    }
+    status = chi_status(policy_count, ratio, thresholds["honest_ratio_gte"])
+
     return {
         "chi_policy_count": policy_count,
         "chi_enforced_count": enforced,
         "chi_drift_count": drift_count,
         "chi_ratio": ratio,
-        "chi_drift_policy_ids": drifted
+        "chi_drift_policy_ids": drifted,
+        "chi_status": status,
+        "chi_thresholds": thresholds
     }
-
-
-def baseline_explanations(signals: list[dict[str, Any]], chi: dict[str, Any]) -> list[dict[str, Any]]:
-    signal_ids = _signal_ids(signals)
-
-    return [
-        {
-            "id": "explain.api.contract.v1",
-            "kind": "system",
-            "severity": "info",
-            "message": "API v1 contract output generated.",
-            "details": {"contract_version": "1.0.0"},
-            "signals": []
-        },
-        {
-            "id": "explain.inputs.signals.ingested",
-            "kind": "system",
-            "severity": "info",
-            "message": "Signals ingested into inputs.signals.",
-            "details": {"signal_count": len(signals)},
-            "signals": signal_ids
-        },
-        {
-            "id": "explain.score.placeholder",
-            "kind": "system",
-            "severity": "info",
-            "message": "Score is placeholder (0). Scoring logic not enabled yet.",
-            "details": {"score": 0, "status": "placeholder"},
-            "signals": []
-        },
-        {
-            "id": "explain.enforcement.disabled",
-            "kind": "enforcement",
-            "severity": "info",
-            "message": "Enforcement is not applied by this generator.",
-            "details": {"enforcement": "disabled"},
-            "signals": []
-        },
-        {
-            "id": "explain.chi.premetric",
-            "kind": "compliance",
-            "severity": "info",
-            "message": "CHI pre-metrics computed from declared policies vs enforcement evidence.",
-            "details": {
-                "chi_policy_count": chi.get("chi_policy_count", 0),
-                "chi_enforced_count": chi.get("chi_enforced_count", 0),
-                "chi_drift_count": chi.get("chi_drift_count", 0),
-                "chi_ratio": chi.get("chi_ratio", 0.0)
-            },
-            "signals": []
-        }
-    ]
 
 
 def baseline_evidence(signals: list[dict[str, Any]], signals_path: str, policy_path: str) -> list[dict[str, Any]]:
@@ -251,7 +207,6 @@ def baseline_evidence(signals: list[dict[str, Any]], signals_path: str, policy_p
             }
         )
 
-    # Evidence: declared policies file (if present)
     if policy_path:
         evidence.append(
             {
@@ -259,13 +214,13 @@ def baseline_evidence(signals: list[dict[str, Any]], signals_path: str, policy_p
                 "kind": "file",
                 "source": "repo",
                 "locator": policy_path,
-                "summary": "Declared policies used for CHI pre-metrics.",
+                "summary": "Declared policies used for CHI metrics.",
                 "details": {},
                 "signals": []
             }
         )
 
-    # Evidence: enforcement proof — API contract check exists (hard-coded, stable)
+    # Enforcement proof: API contract check exists (stable)
     evidence.append(
         {
             "id": "evidence.enforcement.api_contract_check",
@@ -279,6 +234,60 @@ def baseline_evidence(signals: list[dict[str, Any]], signals_path: str, policy_p
     )
 
     return evidence
+
+
+def baseline_explanations(signals: list[dict[str, Any]], chi: dict[str, Any]) -> list[dict[str, Any]]:
+    signal_ids = _signal_ids(signals)
+
+    return [
+        {
+            "id": "explain.api.contract.v1",
+            "kind": "system",
+            "severity": "info",
+            "message": "API v1 contract output generated.",
+            "details": {"contract_version": "1.0.0"},
+            "signals": []
+        },
+        {
+            "id": "explain.inputs.signals.ingested",
+            "kind": "system",
+            "severity": "info",
+            "message": "Signals ingested into inputs.signals.",
+            "details": {"signal_count": len(signals)},
+            "signals": signal_ids
+        },
+        {
+            "id": "explain.score.placeholder",
+            "kind": "system",
+            "severity": "info",
+            "message": "Score is placeholder (0). Scoring logic not enabled yet.",
+            "details": {"score": 0, "status": "placeholder"},
+            "signals": []
+        },
+        {
+            "id": "explain.enforcement.disabled",
+            "kind": "enforcement",
+            "severity": "info",
+            "message": "Enforcement is not applied by this generator.",
+            "details": {"enforcement": "disabled"},
+            "signals": []
+        },
+        {
+            "id": "explain.chi.status",
+            "kind": "compliance",
+            "severity": "info",
+            "message": "CHI status computed from declared policies vs enforcement evidence.",
+            "details": {
+                "chi_status": chi.get("chi_status", "unknown"),
+                "chi_ratio": chi.get("chi_ratio", 0.0),
+                "chi_policy_count": chi.get("chi_policy_count", 0),
+                "chi_enforced_count": chi.get("chi_enforced_count", 0),
+                "chi_drift_count": chi.get("chi_drift_count", 0),
+                "chi_thresholds": chi.get("chi_thresholds", {})
+            },
+            "signals": []
+        }
+    ]
 
 
 def main(argv: list[str]) -> int:
@@ -317,17 +326,18 @@ def main(argv: list[str]) -> int:
     data.setdefault("inputs", {})
     data["inputs"]["signals"] = signals
 
-    # Outputs: evidence first (so CHI can reference it)
+    # Outputs: build evidence first (CHI uses it)
     data.setdefault("outputs", {})
     evidence = baseline_evidence(signals, signals_path, policy_path)
     chi = compute_chi_metrics(policies, evidence)
 
-    # Explanations + metrics
+    # Explanations + evidence
     data["outputs"]["explanations"] = baseline_explanations(signals, chi)
     data["outputs"]["evidence"] = evidence
 
+    # Metrics: base + CHI
     metrics = compute_metrics(signals)
-    metrics.update(chi)  # merge CHI pre-metrics into outputs.metrics
+    metrics.update(chi)
     data["outputs"]["metrics"] = metrics
 
     save_json(output_path, data)
