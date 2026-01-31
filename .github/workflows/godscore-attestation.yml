@@ -49,7 +49,7 @@ jobs:
       - name: Install cosign
         uses: sigstore/cosign-installer@v3
 
-      - name: Sigstore sign attestation (bundle)
+      - name: Sigstore sign attestation (writes bundle)
         run: |
           cosign sign-blob --yes \
             --bundle pages/.well-known/godscore.sigstore.json \
@@ -59,6 +59,28 @@ jobs:
         run: |
           cp pages/.well-known/godscore.json pages/godscore.json
           cp pages/.well-known/godscore.sigstore.json pages/godscore.sigstore.json
+
+      - name: Add root index.html (prevents Pages 404)
+        run: |
+          cat > pages/index.html <<'HTML'
+          <!doctype html>
+          <html>
+            <head>
+              <meta charset="utf-8" />
+              <meta http-equiv="refresh" content="0; url=./dashboard/" />
+              <meta name="viewport" content="width=device-width, initial-scale=1" />
+              <title>godscore-ci</title>
+            </head>
+            <body>
+              <p>Redirecting to <a href="./dashboard/">dashboard</a>…</p>
+            </body>
+          </html>
+          HTML
+
+      - name: Debug: list pages contents
+        run: |
+          echo "=== pages files ==="
+          find pages -maxdepth 4 -type f -print
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
