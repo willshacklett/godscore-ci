@@ -87,7 +87,7 @@ def main(argv: list[str]) -> int:
 
     # Step 5 (B): optional signals path via env
     signals_path = env("GODSCORE_SIGNALS_PATH", "")
-    signals = load_signals(signals_path)
+    signals = load_signals(signals_path) if signals_path else []
 
     # Fill timestamps + context
     data["generated_at"] = iso_utc_now()
