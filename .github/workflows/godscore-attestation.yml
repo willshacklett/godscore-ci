@@ -49,7 +49,7 @@ jobs:
       - name: Install cosign
         uses: sigstore/cosign-installer@v3
 
-      - name: Sigstore sign attestation
+      - name: Sigstore sign attestation (bundle)
         run: |
           cosign sign-blob --yes \
             --bundle pages/.well-known/godscore.sigstore.json \
@@ -58,7 +58,6 @@ jobs:
       - name: Root-level convenience copies
         run: |
           cp pages/.well-known/godscore.json pages/godscore.json
-          cp pages/.well-known/godscore.sig pages/godscore.sig
           cp pages/.well-known/godscore.sigstore.json pages/godscore.sigstore.json
 
       - name: Upload Pages artifact
@@ -71,7 +70,7 @@ jobs:
     needs: build
 
     environment:
-      name: github-pages   # 🔑 THIS IS THE REQUIRED FIX
+      name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
