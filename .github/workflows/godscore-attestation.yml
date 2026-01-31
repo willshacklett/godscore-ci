@@ -6,45 +6,51 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+  pages: write
   id-token: write   # required for keyless sigstore signing
 
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
 jobs:
-  publish_attestation:
+  build-attestation:
     runs-on: ubuntu-latest
 
     steps:
       # ------------------------------------------------------------
-      # Build attestation from main
+      # Checkout source
       # ------------------------------------------------------------
-      - name: Checkout main
+      - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Generate v1 output (env + signals)
+      # ------------------------------------------------------------
+      # Build GodScore output
+      # ------------------------------------------------------------
+      - name: Generate v1 output
         run: |
           mkdir -p api/out
           export GODSCORE_SIGNALS_PATH=api/example_signals.v1.json
           python api/generate_v1.py api/example_output.v1.json api/out/godscore.output.v1.json
 
-      - name: Validate v1 output against contract
+      - name: Validate output
         run: |
           python api/validate_v1.py api/schema.v1.json api/out/godscore.output.v1.json
 
-      - name: Build attestation (HMAC signed)
+      - name: Build attestation (HMAC)
         env:
           GODSCORE_ATTESTATION_HMAC: ${{ secrets.GODSCORE_ATTESTATION_HMAC }}
         run: |
-          mkdir -p attestation
+          mkdir -p pages/.well-known
           python api/build_attestation.py \
             api/out/godscore.output.v1.json \
-            attestation/godscore.json
+            pages/.well-known/godscore.json
 
       # ------------------------------------------------------------
       # Keyless Sigstore signing
@@ -52,58 +58,26 @@ jobs:
       - name: Install cosign
         uses: sigstore/cosign-installer@v3
 
-      - name: Sigstore sign attestation (keyless)
+      - name: Sigstore sign attestation
         run: |
           cosign sign-blob --yes \
-            --bundle attestation/godscore.sigstore.json \
-            attestation/godscore.json
+            --bundle pages/.well-known/godscore.sigstore.json \
+            pages/.well-known/godscore.json
+
+      # Convenience copies
+      - name: Copy root-level files
+        run: |
+          cp pages/.well-known/godscore.json pages/godscore.json
+          cp pages/.well-known/godscore.sig pages/godscore.sig
+          cp pages/.well-known/godscore.sigstore.json pages/godscore.sigstore.json
 
       # ------------------------------------------------------------
-      # Preserve artifacts across branch switch
+      # Publish to GitHub Pages (CORRECT METHOD)
       # ------------------------------------------------------------
-      - name: Stage attestation files
-        run: |
-          mkdir -p "$RUNNER_TEMP/godscore_att"
-          cp attestation/godscore.json "$RUNNER_TEMP/godscore_att/godscore.json"
-          cp attestation/godscore.json.sig "$RUNNER_TEMP/godscore_att/godscore.sig"
-          cp attestation/godscore.sigstore.json "$RUNNER_TEMP/godscore_att/godscore.sigstore.json"
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: pages
 
-      # ------------------------------------------------------------
-      # Publish into gh-pages WITHOUT touching dashboard
-      # ------------------------------------------------------------
-      - name: Checkout gh-pages (create if missing)
-        run: |
-          git fetch origin gh-pages || true
-          if git show-ref --verify --quiet refs/remotes/origin/gh-pages; then
-            git checkout gh-pages
-          else
-            git checkout --orphan gh-pages
-            git rm -rf .
-          fi
-
-      - name: Publish attestation to .well-known
-        run: |
-          mkdir -p .well-known
-
-          cp "$RUNNER_TEMP/godscore_att/godscore.json" .well-known/godscore.json
-          cp "$RUNNER_TEMP/godscore_att/godscore.sig" .well-known/godscore.sig
-          cp "$RUNNER_TEMP/godscore_att/godscore.sigstore.json" .well-known/godscore.sigstore.json
-
-          # Convenience copies at site root
-          cp "$RUNNER_TEMP/godscore_att/godscore.json" godscore.json
-          cp "$RUNNER_TEMP/godscore_att/godscore.sig" godscore.sig
-          cp "$RUNNER_TEMP/godscore_att/godscore.sigstore.json" godscore.sigstore.json
-
-      - name: Commit and push gh-pages
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add \
-            .well-known/godscore.json \
-            .well-known/godscore.sig \
-            .well-known/godscore.sigstore.json \
-            godscore.json \
-            godscore.sig \
-            godscore.sigstore.json
-          git commit -m "chore: publish godscore attestation (.well-known + sigstore)" || echo "No changes to commit"
-          git push origin gh-pages
+      - name: Deploy Pages
+        uses: actions/deploy-pages@v4
