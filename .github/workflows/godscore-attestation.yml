@@ -31,7 +31,9 @@ jobs:
         run: |
           python api/validate_v1.py api/schema.v1.json api/out/godscore.output.v1.json
 
-      - name: Build attestation
+      - name: Build attestation (signed)
+        env:
+          GODSCORE_ATTESTATION_HMAC: ${{ secrets.GODSCORE_ATTESTATION_HMAC }}
         run: |
           mkdir -p attestation
           python api/build_attestation.py api/out/godscore.output.v1.json attestation/godscore.json
@@ -46,8 +48,9 @@ jobs:
         run: |
           mkdir -p pages/.well-known
           cp attestation/godscore.json pages/.well-known/godscore.json
+          cp attestation/godscore.json.sig pages/.well-known/godscore.sig
           cp attestation/godscore.json pages/godscore.json
-          # Ensure dotfiles are served by Pages
+          cp attestation/godscore.json.sig pages/godscore.sig
           touch pages/.nojekyll
 
       - name: Commit and push to gh-pages
@@ -55,6 +58,6 @@ jobs:
           cd pages
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add .well-known/godscore.json godscore.json .nojekyll
-          git commit -m "chore: publish godscore attestation" || echo "No changes to commit"
+          git add .well-known/godscore.json .well-known/godscore.sig godscore.json godscore.sig .nojekyll
+          git commit -m "chore: publish signed godscore attestation" || echo "No changes to commit"
           git push
