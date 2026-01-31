@@ -5,8 +5,10 @@ api/build_attestation.py
 Builds a public, machine-readable "GodScore attestation" JSON from the
 generated v1 output artifact.
 
-Outputs a compact object suitable for publishing at:
-  /.well-known/godscore.json
+Step 21:
+- If env GODSCORE_ATTESTATION_HMAC is set, adds an HMAC-SHA256 signature
+  over a canonical JSON form of the attestation *without* the signature field.
+- Also writes a standalone .sig file alongside the JSON.
 
 Usage:
   python api/build_attestation.py <input_output_json> <output_attestation_json>
@@ -17,6 +19,9 @@ Example:
 
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
 import json
 import os
 import sys
@@ -39,6 +44,14 @@ def save_json(path: str, data: Dict[str, Any]) -> None:
         f.write("\n")
 
 
+def save_text(path: str, text: str) -> None:
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(text)
+        if not text.endswith("\n"):
+            f.write("\n")
+
+
 def iso_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
@@ -52,13 +65,29 @@ def safe_get(d: Any, keys: list[str], default: Any) -> Any:
     return cur
 
 
+def canonical_json_bytes(obj: Dict[str, Any]) -> bytes:
+    """
+    Canonical JSON representation:
+    - sorted keys
+    - no whitespace
+    """
+    s = json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return s.encode("utf-8")
+
+
+def hmac_sha256_b64(secret: str, payload: bytes) -> str:
+    mac = hmac.new(secret.encode("utf-8"), payload, hashlib.sha256).digest()
+    return base64.b64encode(mac).decode("utf-8")
+
+
 def main(argv: list[str]) -> int:
     if len(argv) != 3:
         print("Usage: python api/build_attestation.py <input_output_json> <output_attestation_json>")
         return 1
 
     in_path = argv[1]
-    out_path = argv[2]
+    out_json_path = argv[2]
+    out_sig_path = out_json_path + ".sig"
 
     data = load_json(in_path)
 
@@ -77,13 +106,11 @@ def main(argv: list[str]) -> int:
     if not isinstance(metrics, dict):
         metrics = {}
 
-    # Minimal public surface (stable)
     public_metrics = {
         "chi_status": metrics.get("chi_status", "unknown"),
         "chi_ratio": metrics.get("chi_ratio", 0.0),
         "chi_drift_count": metrics.get("chi_drift_count", 0),
         "chi_drift_policy_ids": metrics.get("chi_drift_policy_ids", []),
-        # Tier exports (Step 19+) if present
         "chi_drift_by_tier": metrics.get("chi_drift_by_tier", {}),
         "chi_max_drift_tier": metrics.get("chi_max_drift_tier", 0),
         "chi_enforced_tiers": metrics.get("chi_enforced_tiers", []),
@@ -100,7 +127,6 @@ def main(argv: list[str]) -> int:
             "run_id": ctx_run_id,
         },
         "result": {
-            # keep these if present (helpful for external consumers)
             "score": outputs.get("score", 0),
             "grade": outputs.get("grade", "N/A"),
             "threshold": outputs.get("threshold", 0),
@@ -108,14 +134,39 @@ def main(argv: list[str]) -> int:
         },
         "metrics": public_metrics,
         "links": {
-            # relative links, so they work anywhere Pages is hosted
             "dashboard": "/",
             "attestation": "/.well-known/godscore.json",
+            "signature": "/.well-known/godscore.sig",
         },
+        "meta": {
+            "api_version": version
+        }
     }
 
-    save_json(out_path, attestation)
-    print(f"✅ wrote attestation: {out_path}")
+    secret = os.getenv("GODSCORE_ATTESTATION_HMAC", "").strip()
+
+    if secret:
+        unsigned = dict(attestation)  # shallow copy ok (signature not present yet)
+        payload = canonical_json_bytes(unsigned)
+        sig_b64 = hmac_sha256_b64(secret, payload)
+
+        attestation["signature"] = {
+            "alg": "HMAC-SHA256",
+            "encoding": "base64",
+            "value": sig_b64,
+            "signed_at": iso_now(),
+            "key_id": "github-actions-secret:v1"
+        }
+
+        save_text(out_sig_path, sig_b64)
+        print(f"✅ wrote signature: {out_sig_path}")
+    else:
+        # Still write a sig file (empty marker) so consumers can detect "unsigned"
+        save_text(out_sig_path, "")
+        print("⚠️ GODSCORE_ATTESTATION_HMAC not set; wrote empty .sig")
+
+    save_json(out_json_path, attestation)
+    print(f"✅ wrote attestation: {out_json_path}")
     return 0
 
 
