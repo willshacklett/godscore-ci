@@ -5,10 +5,13 @@ api/generate_v1.py
 Minimal generator for godscore-ci API v1 output.
 - Reads a base template JSON (schema shape / example)
 - Injects context from environment variables (GitHub Actions-friendly)
+- Optionally reads signals from a signals JSON file (GODSCORE_SIGNALS_PATH)
 - Writes a fully-formed v1 output JSON
 
 Usage:
   python api/generate_v1.py api/example_output.v1.json api/out/godscore.output.v1.json
+Optional:
+  export GODSCORE_SIGNALS_PATH=api/example_signals.v1.json
 """
 
 from __future__ import annotations
@@ -43,6 +46,32 @@ def env(name: str, default: str = "") -> str:
     return v if (v is not None and v != "") else default
 
 
+def load_signals(path: str) -> list[dict[str, Any]]:
+    """
+    Loads signals from a JSON file shaped like:
+      { "version": "1.0.0", "signals": [ ... ] }
+
+    Returns [] if missing or invalid (we keep the generator resilient).
+    """
+    if not path:
+        return []
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(data, dict) and isinstance(data.get("signals"), list):
+            # Ensure each signal is an object
+            out: list[dict[str, Any]] = []
+            for s in data["signals"]:
+                if isinstance(s, dict):
+                    out.append(s)
+            return out
+    except FileNotFoundError:
+        return []
+    except Exception:
+        return []
+    return []
+
+
 def main(argv: list[str]) -> int:
     if len(argv) != 3:
         print("Usage: python api/generate_v1.py <template.json> <output.json>")
@@ -56,6 +85,10 @@ def main(argv: list[str]) -> int:
     sha = env("GITHUB_SHA", data.get("context", {}).get("sha", ""))
     run_id = env("GITHUB_RUN_ID", data.get("context", {}).get("run_id", "local"))
 
+    # Step 5 (B): optional signals path via env
+    signals_path = env("GODSCORE_SIGNALS_PATH", "")
+    signals = load_signals(signals_path)
+
     # Fill timestamps + context
     data["generated_at"] = iso_utc_now()
     data.setdefault("context", {})
@@ -68,6 +101,10 @@ def main(argv: list[str]) -> int:
     data.setdefault("subject", {})
     data["subject"]["type"] = data["subject"].get("type", "repo") or "repo"
     data["subject"]["id"] = repo or data["subject"].get("id", "unknown")
+
+    # Step 5 (C): inject signals into inputs
+    data.setdefault("inputs", {})
+    data["inputs"]["signals"] = signals
 
     save_json(output_path, data)
     print(f"[ok] wrote {output_path}")
