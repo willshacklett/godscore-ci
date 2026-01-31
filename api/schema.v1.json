@@ -11,16 +11,16 @@
     "sha": "string",
     "run_id": "string"
   },
-  "inputs": {
-    "signals": []
-  },
-  "outputs": {
-    "score": 0,
-    "grade": "UNKNOWN",
-    "threshold": 0,
-    "pass": false,
-    "explanations": [],
-    "evidence": [],
-    "metrics": {}
-  }
+"inputs": {
+  "signals": [
+    {
+      "id": "string",
+      "type": "string",
+      "severity": "string",
+      "source": "string",
+      "ts": "string",
+      "message": "string",
+      "meta": {}
+    }
+  ]
 }
