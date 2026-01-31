@@ -4,11 +4,14 @@ api/generate_v1.py
 
 GodScore API v1 generator.
 
-Supports two modes:
-1) Full generation: generate_v1.py <input.json> <output.json>
-2) Extend mode:      generate_v1.py  (extends existing output)
+Modes:
+1) Full generation:
+   generate_v1.py <input.json> <output.json>
+   - guarantees minimal universal CHI metrics
 
-This keeps API Contract and all other workflows compatible.
+2) Extend mode:
+   generate_v1.py
+   - extends existing output in-place
 """
 
 from __future__ import annotations
@@ -40,7 +43,11 @@ def load_policies(path: str) -> Dict[str, Dict[str, Any]]:
         data = load_json(path)
     except Exception:
         return {}
-    return {p["id"]: p for p in data.get("policies", []) if isinstance(p, dict) and "id" in p}
+    return {
+        p["id"]: p
+        for p in data.get("policies", [])
+        if isinstance(p, dict) and "id" in p
+    }
 
 
 def policy_tier(p: Dict[str, Any]) -> int:
@@ -50,11 +57,24 @@ def policy_tier(p: Dict[str, Any]) -> int:
         return 0
 
 
+def ensure_universal_chi(metrics: Dict[str, Any]) -> None:
+    """Guarantee minimal universal CHI metrics."""
+    metrics.setdefault("chi_drift_count", 0)
+    metrics.setdefault("chi_ratio", 0.0)
+    metrics.setdefault("chi_status", "unknown")
+    metrics.setdefault("chi_drift_policy_ids", [])
+
+
 def extend_with_tiers(data: Dict[str, Any]) -> None:
     policy_path = os.getenv("GODSCORE_POLICY_PATH", "api/policy.v1.json")
     policies = load_policies(policy_path)
 
-    metrics = data.setdefault("outputs", {}).setdefault("metrics", {})
+    outputs = data.setdefault("outputs", {})
+    metrics = outputs.setdefault("metrics", {})
+
+    # 🔒 Guarantee contract surface
+    ensure_universal_chi(metrics)
+
     drift_ids = metrics.get("chi_drift_policy_ids", [])
 
     drift_by_tier: Dict[str, list[str]] = {}
