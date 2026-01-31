@@ -7,7 +7,7 @@ on:
 
 permissions:
   contents: write
-  id-token: write   # ✅ REQUIRED for keyless Sigstore signing (OIDC)
+  id-token: write   # required for keyless sigstore signing
 
 jobs:
   publish_attestation:
@@ -16,6 +16,8 @@ jobs:
     steps:
       - name: Checkout main
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -39,45 +41,51 @@ jobs:
           mkdir -p attestation
           python api/build_attestation.py api/out/godscore.output.v1.json attestation/godscore.json
 
-      # ✅ Install Cosign for keyless signing
       - name: Install cosign
         uses: sigstore/cosign-installer@v3
 
-      # ✅ Keyless (public-verifiable) signature bundle
       - name: Sigstore sign attestation (keyless)
         run: |
-          cosign version
           cosign sign-blob --yes \
             --bundle attestation/godscore.sigstore.json \
             attestation/godscore.json
 
-      # 🔹 Publish into docs/ for GitHub Pages
-      - name: Publish attestation to docs/.well-known
+      # ✅ Save the files to runner temp so branch switching doesn't lose them
+      - name: Stage attestation files for publishing
         run: |
-          mkdir -p docs/.well-known
+          mkdir -p "$RUNNER_TEMP/godscore_att"
+          cp attestation/godscore.json "$RUNNER_TEMP/godscore_att/godscore.json"
+          cp attestation/godscore.json.sig "$RUNNER_TEMP/godscore_att/godscore.sig"
+          cp attestation/godscore.sigstore.json "$RUNNER_TEMP/godscore_att/godscore.sigstore.json"
 
-          # Main attestation + HMAC signature
-          cp attestation/godscore.json docs/.well-known/godscore.json
-          cp attestation/godscore.json.sig docs/.well-known/godscore.sig
+      # ✅ Checkout gh-pages WITHOUT overwriting the dashboard
+      - name: Checkout gh-pages (create if missing)
+        run: |
+          git fetch origin gh-pages || true
+          if git show-ref --verify --quiet refs/remotes/origin/gh-pages; then
+            git checkout gh-pages
+          else
+            git checkout --orphan gh-pages
+            git rm -rf .
+          fi
 
-          # Public-verifiable sigstore bundle
-          cp attestation/godscore.sigstore.json docs/.well-known/godscore.sigstore.json
+      # ✅ Copy files into the Pages root so URLs work exactly as designed
+      - name: Publish to .well-known on GitHub Pages
+        run: |
+          mkdir -p .well-known
+          cp "$RUNNER_TEMP/godscore_att/godscore.json" .well-known/godscore.json
+          cp "$RUNNER_TEMP/godscore_att/godscore.sig" .well-known/godscore.sig
+          cp "$RUNNER_TEMP/godscore_att/godscore.sigstore.json" .well-known/godscore.sigstore.json
 
-          # Convenience copies at site root
-          cp attestation/godscore.json docs/godscore.json
-          cp attestation/godscore.json.sig docs/godscore.sig
-          cp attestation/godscore.sigstore.json docs/godscore.sigstore.json
+          # Optional convenience copies (non-standard but handy)
+          cp "$RUNNER_TEMP/godscore_att/godscore.json" godscore.json
+          cp "$RUNNER_TEMP/godscore_att/godscore.sig" godscore.sig
+          cp "$RUNNER_TEMP/godscore_att/godscore.sigstore.json" godscore.sigstore.json
 
-      - name: Commit and push
+      - name: Commit and push gh-pages
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add \
-            docs/.well-known/godscore.json \
-            docs/.well-known/godscore.sig \
-            docs/.well-known/godscore.sigstore.json \
-            docs/godscore.json \
-            docs/godscore.sig \
-            docs/godscore.sigstore.json
-          git commit -m "chore: publish signed godscore attestation (hmac + sigstore)" || echo "No changes to commit"
-          git push
+          git add .well-known/godscore.json .well-known/godscore.sig .well-known/godscore.sigstore.json godscore.json godscore.sig godscore.sigstore.json
+          git commit -m "chore: publish godscore attestation (.well-known + sigstore)" || echo "No changes to commit"
+          git push origin gh-pages
