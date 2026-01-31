@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write   # ✅ REQUIRED for keyless Sigstore signing (OIDC)
 
 jobs:
   publish_attestation:
@@ -31,26 +32,52 @@ jobs:
         run: |
           python api/validate_v1.py api/schema.v1.json api/out/godscore.output.v1.json
 
-      - name: Build attestation (signed)
+      - name: Build attestation (HMAC signed)
         env:
           GODSCORE_ATTESTATION_HMAC: ${{ secrets.GODSCORE_ATTESTATION_HMAC }}
         run: |
           mkdir -p attestation
           python api/build_attestation.py api/out/godscore.output.v1.json attestation/godscore.json
 
-      # 🔹 Write into Pages-served docs directory
+      # ✅ Install Cosign for keyless signing
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      # ✅ Keyless (public-verifiable) signature bundle
+      - name: Sigstore sign attestation (keyless)
+        run: |
+          cosign version
+          cosign sign-blob --yes \
+            --bundle attestation/godscore.sigstore.json \
+            attestation/godscore.json
+
+      # 🔹 Publish into docs/ for GitHub Pages
       - name: Publish attestation to docs/.well-known
         run: |
           mkdir -p docs/.well-known
+
+          # Main attestation + HMAC signature
           cp attestation/godscore.json docs/.well-known/godscore.json
           cp attestation/godscore.json.sig docs/.well-known/godscore.sig
+
+          # Public-verifiable sigstore bundle
+          cp attestation/godscore.sigstore.json docs/.well-known/godscore.sigstore.json
+
+          # Convenience copies at site root
           cp attestation/godscore.json docs/godscore.json
           cp attestation/godscore.json.sig docs/godscore.sig
+          cp attestation/godscore.sigstore.json docs/godscore.sigstore.json
 
       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs/.well-known/godscore.json docs/.well-known/godscore.sig docs/godscore.json docs/godscore.sig
-          git commit -m "chore: publish signed godscore attestation" || echo "No changes to commit"
+          git add \
+            docs/.well-known/godscore.json \
+            docs/.well-known/godscore.sig \
+            docs/.well-known/godscore.sigstore.json \
+            docs/godscore.json \
+            docs/godscore.sig \
+            docs/godscore.sigstore.json
+          git commit -m "chore: publish signed godscore attestation (hmac + sigstore)" || echo "No changes to commit"
           git push
