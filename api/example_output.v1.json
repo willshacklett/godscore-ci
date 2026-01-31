@@ -1,0 +1,26 @@
+{
+  "version": "1.0.0",
+  "generated_at": "2026-01-31T00:00:00Z",
+  "subject": {
+    "type": "repo",
+    "id": "example/repo"
+  },
+  "context": {
+    "repo": "example/repo",
+    "ref": "refs/heads/main",
+    "sha": "0000000000000000000000000000000000000000",
+    "run_id": "local"
+  },
+  "inputs": {
+    "signals": []
+  },
+  "outputs": {
+    "score": 0,
+    "grade": "UNKNOWN",
+    "threshold": 0,
+    "pass": false,
+    "explanations": [],
+    "evidence": [],
+    "metrics": {}
+  }
+}
