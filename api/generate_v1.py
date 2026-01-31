@@ -12,7 +12,7 @@ Minimal generator for godscore-ci API v1 output.
   - outputs.evidence[] (proof pointers)
   - outputs.metrics{} (stable aggregates)
   - outputs.metrics.chi_* (Constraint Honesty metrics + status)
-  - outputs.recommendations[] (actionable next steps)
+  - outputs.recommendations[] (policy-specific next steps)
 """
 
 from __future__ import annotations
@@ -275,23 +275,35 @@ def baseline_explanations(signals: list[dict[str, Any]], chi: dict[str, Any]) ->
                 "chi_policy_count": chi.get("chi_policy_count", 0),
                 "chi_enforced_count": chi.get("chi_enforced_count", 0),
                 "chi_drift_count": chi.get("chi_drift_count", 0),
-                "chi_thresholds": chi.get("chi_thresholds", {})
+                "chi_thresholds": chi.get("chi_thresholds", {}),
+                "chi_drift_policy_ids": chi.get("chi_drift_policy_ids", [])
             },
             "signals": []
         }
     ]
 
 
-def build_recommendations(chi: dict[str, Any], evidence: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def build_recommendations(
+    chi: dict[str, Any],
+    policies: list[dict[str, Any]],
+    evidence: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
     """
-    Actionable next steps without scoring:
-    - If policies are drifting, recommend adding enforcement evidence
+    Policy-specific recommendations:
+    - For each drifted policy, suggest adding matching evidence (kind + locator).
     """
     drifted = chi.get("chi_drift_policy_ids", [])
     if not isinstance(drifted, list):
         drifted = []
 
-    evidence_ids = []
+    # index policies by id
+    pol_index: dict[str, dict[str, Any]] = {}
+    for p in policies:
+        pid = p.get("id")
+        if isinstance(pid, str) and pid:
+            pol_index[pid] = p
+
+    evidence_ids: list[str] = []
     for ev in evidence:
         if isinstance(ev, dict):
             eid = ev.get("id")
@@ -300,21 +312,21 @@ def build_recommendations(chi: dict[str, Any], evidence: list[dict[str, Any]]) -
 
     recs: list[dict[str, Any]] = []
 
-    if len(drifted) > 0:
+    if len(policies) == 0:
         recs.append(
             {
-                "id": "rec.chi.add_enforcement_evidence",
+                "id": "rec.chi.add_policies",
                 "kind": "compliance",
-                "severity": "medium",
-                "message": "Declared policies lack matching enforcement evidence. Add evidence entries or CI checks to close CHI drift.",
-                "details": {
-                    "drift_policy_count": len(drifted)
-                },
-                "policies": drifted,
+                "severity": "low",
+                "message": "No declared policies found. Add api/policy.v1.json entries to enable CHI measurement.",
+                "details": {"policy_path_default": "api/policy.v1.json"},
+                "policies": [],
                 "evidence": evidence_ids
             }
         )
-    else:
+        return recs
+
+    if len(drifted) == 0:
         recs.append(
             {
                 "id": "rec.chi.maintain_alignment",
@@ -326,6 +338,50 @@ def build_recommendations(chi: dict[str, Any], evidence: list[dict[str, Any]]) -
                 "evidence": evidence_ids
             }
         )
+        return recs
+
+    for pid in drifted:
+        if not isinstance(pid, str) or not pid:
+            continue
+
+        p = pol_index.get(pid, {})
+        ek = p.get("evidence_kind")
+        el = p.get("evidence_locator")
+
+        suggested = {}
+        if isinstance(ek, str) and isinstance(el, str):
+            suggested = {"kind": ek, "locator": el}
+
+        safe_id = pid.replace(" ", "_").replace("/", "_").replace(":", "_")
+
+        recs.append(
+            {
+                "id": f"rec.chi.policy.{safe_id}.add_evidence",
+                "kind": "compliance",
+                "severity": "medium",
+                "message": f"Policy '{pid}' lacks matching enforcement evidence. Add or emit the suggested evidence entry to close CHI drift.",
+                "details": {
+                    "policy_id": pid,
+                    "suggested_evidence": suggested
+                },
+                "policies": [pid],
+                "evidence": evidence_ids
+            }
+        )
+
+    # also include a roll-up recommendation
+    recs.insert(
+        0,
+        {
+            "id": "rec.chi.close_drift",
+            "kind": "compliance",
+            "severity": "high" if len(drifted) > 3 else "medium",
+            "message": "Close CHI drift by adding enforcement evidence for each drifted policy.",
+            "details": {"drift_policy_count": len(drifted)},
+            "policies": drifted,
+            "evidence": evidence_ids
+        }
+    )
 
     return recs
 
@@ -375,8 +431,8 @@ def main(argv: list[str]) -> int:
     data["outputs"]["explanations"] = baseline_explanations(signals, chi)
     data["outputs"]["evidence"] = evidence
 
-    # Recommendations
-    data["outputs"]["recommendations"] = build_recommendations(chi, evidence)
+    # Recommendations (policy-specific)
+    data["outputs"]["recommendations"] = build_recommendations(chi, policies, evidence)
 
     # Metrics: base + CHI
     metrics = compute_metrics(signals)
