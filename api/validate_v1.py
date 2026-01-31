@@ -8,6 +8,7 @@ Validates that a JSON payload OR schema:
 - contains required keys
 - has correct top-level types
 - explanations[] and evidence[] are structured objects
+- recommendations[] (optional) is structured if present
 """
 
 from __future__ import annotations
@@ -162,6 +163,46 @@ def validate(payload: Dict[str, Any]) -> bool:
         if not isinstance(ev["signals"], list):
             err(f"outputs.evidence[{i}].signals must be a list")
             return False
+
+    # metrics must be an object
+    if not require_type(payload["outputs"]["metrics"], dict, "outputs.metrics"):
+        return False
+
+    # recommendations[] is OPTIONAL, but if present must be valid
+    if "recommendations" in payload["outputs"]:
+        recs = payload["outputs"]["recommendations"]
+        if not require_type(recs, list, "outputs.recommendations"):
+            return False
+
+        for i, rec in enumerate(recs):
+            if not isinstance(rec, dict):
+                err(f"outputs.recommendations[{i}] must be an object")
+                return False
+            for k in ["id", "kind", "severity", "message", "details", "policies", "evidence"]:
+                if k not in rec:
+                    err(f"outputs.recommendations[{i}] missing key: {k}")
+                    return False
+            if not isinstance(rec["id"], str) or not rec["id"]:
+                err(f"outputs.recommendations[{i}].id must be a non-empty string")
+                return False
+            if not isinstance(rec["kind"], str) or not rec["kind"]:
+                err(f"outputs.recommendations[{i}].kind must be a non-empty string")
+                return False
+            if not isinstance(rec["severity"], str) or not rec["severity"]:
+                err(f"outputs.recommendations[{i}].severity must be a non-empty string")
+                return False
+            if not isinstance(rec["message"], str) or not rec["message"]:
+                err(f"outputs.recommendations[{i}].message must be a non-empty string")
+                return False
+            if not isinstance(rec["details"], dict):
+                err(f"outputs.recommendations[{i}].details must be an object")
+                return False
+            if not isinstance(rec["policies"], list):
+                err(f"outputs.recommendations[{i}].policies must be a list")
+                return False
+            if not isinstance(rec["evidence"], list):
+                err(f"outputs.recommendations[{i}].evidence must be a list")
+                return False
 
     return True
 
