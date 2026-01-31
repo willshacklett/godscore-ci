@@ -2,15 +2,21 @@
 """
 api/generate_v1.py
 
-Step 19 FIX:
-- Extend existing output with tier-aware CHI metrics
-- Do NOT overwrite previously generated content
+GodScore API v1 generator.
+
+Supports two modes:
+1) Full generation: generate_v1.py <input.json> <output.json>
+2) Extend mode:      generate_v1.py  (extends existing output)
+
+This keeps API Contract and all other workflows compatible.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import sys
+from datetime import datetime, timezone
 from typing import Any, Dict
 
 
@@ -25,17 +31,16 @@ def save_json(path: str, data: Dict[str, Any]) -> None:
         f.write("\n")
 
 
+def iso_now() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
 def load_policies(path: str) -> Dict[str, Dict[str, Any]]:
     try:
         data = load_json(path)
     except Exception:
         return {}
-    out = {}
-    for p in data.get("policies", []):
-        pid = p.get("id")
-        if isinstance(pid, str):
-            out[pid] = p
-    return out
+    return {p["id"]: p for p in data.get("policies", []) if isinstance(p, dict) and "id" in p}
 
 
 def policy_tier(p: Dict[str, Any]) -> int:
@@ -45,14 +50,11 @@ def policy_tier(p: Dict[str, Any]) -> int:
         return 0
 
 
-def main() -> None:
-    output_path = "api/out/godscore.output.v1.json"
+def extend_with_tiers(data: Dict[str, Any]) -> None:
     policy_path = os.getenv("GODSCORE_POLICY_PATH", "api/policy.v1.json")
-
-    data = load_json(output_path)
     policies = load_policies(policy_path)
 
-    metrics = data.get("outputs", {}).get("metrics", {})
+    metrics = data.setdefault("outputs", {}).setdefault("metrics", {})
     drift_ids = metrics.get("chi_drift_policy_ids", [])
 
     drift_by_tier: Dict[str, list[str]] = {}
@@ -72,6 +74,21 @@ def main() -> None:
     metrics["chi_max_drift_tier"] = max_tier
     metrics["chi_enforced_tiers"] = sorted(enforced_tiers)
 
+
+def main() -> None:
+    # --- Mode 1: full generation (API Contract) ---
+    if len(sys.argv) == 3:
+        _, input_path, output_path = sys.argv
+        data = load_json(input_path)
+        data["generated_at"] = iso_now()
+        extend_with_tiers(data)
+        save_json(output_path, data)
+        return
+
+    # --- Mode 2: extend existing output ---
+    output_path = "api/out/godscore.output.v1.json"
+    data = load_json(output_path)
+    extend_with_tiers(data)
     save_json(output_path, data)
 
 
