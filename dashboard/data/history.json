@@ -357,5 +357,23 @@
       "ruff_ok": false,
       "ruff_findings": 111
     }
+  },
+  {
+    "ts": "2026-01-31T15:23:51.493921Z",
+    "ref": "main",
+    "sha": "a8b483e",
+    "godscore": 30.0,
+    "engine": {
+      "python_function_error": "cannot import name 'compute_godscore' from 'godscore' (/home/runner/work/godscore-ci/godscore-ci/godscore.py)",
+      "cli_candidate": "gv_gate.py",
+      "cli_returncode": 2,
+      "fallback": "qa_scaffold",
+      "note": "Engine not detected yet; using tests+lint derived score."
+    },
+    "breakdown": {
+      "tests_ok": false,
+      "ruff_ok": false,
+      "ruff_findings": 111
+    }
   }
 ]
