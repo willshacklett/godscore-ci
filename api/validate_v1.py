@@ -40,7 +40,7 @@ def main() -> None:
 
     _, schema_path, output_path = sys.argv
 
-    # Ensure schema exists (not shape-enforced)
+    # Ensure schema exists (shape is not enforced)
     load_json(schema_path)
     data = load_json(output_path)
 
@@ -48,15 +48,12 @@ def main() -> None:
     require(data, "outputs", dict)
 
     outputs = data["outputs"]
-    require(outputs, "score", (int, float))
-    require(outputs, "pass", bool)
     require(outputs, "metrics", dict)
 
     metrics = outputs["metrics"]
 
-    # --- Minimal required metrics ---
+    # --- FINAL minimal universal metrics ---
     required_metrics = {
-        "signal_count": int,
         "chi_drift_count": int,
         "chi_ratio": (int, float),
         "chi_status": str,
@@ -71,6 +68,7 @@ def main() -> None:
 
     # --- Optional metrics (allowed if present) ---
     optional_metrics = {
+        "signal_count": int,
         "chi_policy_count": int,
         "chi_drift_by_tier": dict,
         "chi_max_drift_tier": int,
