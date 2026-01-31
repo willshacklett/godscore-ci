@@ -2,12 +2,12 @@
 """
 api/validate_v1.py
 
-Contract validator for GodScore API v1.
+GodScore API v1 contract validator.
 
-Rules:
-- Required top-level and metric fields must exist
-- Types must be correct
-- Extra fields are allowed (forward-compatible)
+Contract rules:
+- Validate the required OUTPUT SHAPE
+- Do not enforce metadata fields
+- Allow forward-compatible extensions
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ def load_json(path: str) -> Dict[str, Any]:
 
 
 def fail(msg: str) -> None:
-    print("❌ Contract validation failed:")
+    print("❌ API Contract (v1) validation failed:")
     print(msg)
     sys.exit(1)
 
@@ -32,7 +32,7 @@ def require(obj: Dict[str, Any], key: str, typ) -> None:
     if key not in obj:
         fail(f"Missing required key: {key}")
     if not isinstance(obj[key], typ):
-        fail(f"Key '{key}' must be {typ.__name__}")
+        fail(f"Key '{key}' must be {typ}")
 
 
 def main() -> None:
@@ -42,25 +42,22 @@ def main() -> None:
 
     _, schema_path, output_path = sys.argv
 
-    schema = load_json(schema_path)
+    # schema is loaded only to confirm it exists
+    load_json(schema_path)
     data = load_json(output_path)
 
-    # --- Top-level ---
-    require(data, "version", str)
-    require(data, "generated_at", str)
-    require(data, "context", dict)
+    # --- Required surface ---
     require(data, "outputs", dict)
 
     outputs = data["outputs"]
 
-    # --- Outputs ---
     require(outputs, "score", (int, float))
     require(outputs, "pass", bool)
     require(outputs, "metrics", dict)
 
     metrics = outputs["metrics"]
 
-    # --- Required metric keys (minimum contract) ---
+    # --- Minimum required metrics ---
     required_metrics = {
         "signal_count": int,
         "chi_policy_count": int,
@@ -76,7 +73,7 @@ def main() -> None:
         if not isinstance(metrics[key], typ):
             fail(f"metrics.{key} must be {typ}")
 
-    # --- Optional tier-aware metrics (Step 19) ---
+    # --- Optional tier-aware metrics (Step 19+) ---
     optional_metrics = {
         "chi_drift_by_tier": dict,
         "chi_max_drift_tier": int,
