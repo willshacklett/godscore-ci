@@ -95,8 +95,39 @@ def validate(payload: Dict[str, Any]) -> bool:
     ):
         return False
 
-    return True
+    # explanations must be a list of objects with required keys
+    exps = payload["outputs"]["explanations"]
+    if not require_type(exps, list, "outputs.explanations"):
+        return False
 
+    for i, ex in enumerate(exps):
+        if not isinstance(ex, dict):
+            err(f"outputs.explanations[{i}] must be an object")
+            return False
+        for k in ["id", "kind", "severity", "message", "details", "signals"]:
+            if k not in ex:
+                err(f"outputs.explanations[{i}] missing key: {k}")
+                return False
+        if not isinstance(ex["id"], str) or not ex["id"]:
+            err(f"outputs.explanations[{i}].id must be a non-empty string")
+            return False
+        if not isinstance(ex["kind"], str) or not ex["kind"]:
+            err(f"outputs.explanations[{i}].kind must be a non-empty string")
+            return False
+        if not isinstance(ex["severity"], str) or not ex["severity"]:
+            err(f"outputs.explanations[{i}].severity must be a non-empty string")
+            return False
+        if not isinstance(ex["message"], str) or not ex["message"]:
+            err(f"outputs.explanations[{i}].message must be a non-empty string")
+            return False
+        if not isinstance(ex["details"], dict):
+            err(f"outputs.explanations[{i}].details must be an object")
+            return False
+        if not isinstance(ex["signals"], list):
+            err(f"outputs.explanations[{i}].signals must be a list")
+            return False
+
+    return True
 
 def main(argv: List[str]) -> int:
     if len(argv) != 3:
