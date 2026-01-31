@@ -8,6 +8,7 @@ Minimal generator for godscore-ci API v1 output.
 - Optionally reads signals from a JSON file (GODSCORE_SIGNALS_PATH)
 - Emits baseline machine-readable explanations (outputs.explanations[])
 - Emits baseline machine-readable evidence (outputs.evidence[])
+- Emits stable metrics (outputs.metrics)
 - Writes a fully-formed v1 output JSON
 """
 
@@ -77,11 +78,41 @@ def _signal_ids(signals: list[dict[str, Any]]) -> list[str]:
     return ids
 
 
+def compute_metrics(signals: list[dict[str, Any]]) -> dict[str, Any]:
+    """
+    First stable metrics. No scoring yet.
+    """
+    by_sev = {
+        "info": 0,
+        "low": 0,
+        "medium": 0,
+        "high": 0,
+        "critical": 0,
+        "unknown": 0,
+    }
+
+    for s in signals:
+        sev = s.get("severity")
+        if isinstance(sev, str):
+            sev_norm = sev.strip().lower()
+        else:
+            sev_norm = "unknown"
+        if sev_norm not in by_sev:
+            sev_norm = "unknown"
+        by_sev[sev_norm] += 1
+
+    return {
+        "signal_count": len(signals),
+        "signals_by_severity": by_sev,
+    }
+
+
 def baseline_explanations(signals: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """
     Machine-readable explanations. IDs must remain stable.
     """
     signal_ids = _signal_ids(signals)
+    metrics = compute_metrics(signals)
 
     return [
         {
@@ -97,7 +128,7 @@ def baseline_explanations(signals: list[dict[str, Any]]) -> list[dict[str, Any]]
             "kind": "system",
             "severity": "info",
             "message": "Signals ingested into inputs.signals.",
-            "details": {"signal_count": len(signals)},
+            "details": {"signal_count": metrics["signal_count"]},
             "signals": signal_ids
         },
         {
@@ -125,10 +156,10 @@ def baseline_evidence(signals: list[dict[str, Any]], signals_path: str) -> list[
     Keep minimal + stable in v1.
     """
     signal_ids = _signal_ids(signals)
+    metrics = compute_metrics(signals)
 
     evidence: list[dict[str, Any]] = []
 
-    # Evidence: the emitted output itself (artifact path is stable in our workflows)
     evidence.append(
         {
             "id": "evidence.output.file",
@@ -141,7 +172,6 @@ def baseline_evidence(signals: list[dict[str, Any]], signals_path: str) -> list[
         }
     )
 
-    # Evidence: signals file if provided
     if signals_path:
         evidence.append(
             {
@@ -150,7 +180,7 @@ def baseline_evidence(signals: list[dict[str, Any]], signals_path: str) -> list[
                 "source": "repo",
                 "locator": signals_path,
                 "summary": "Signals JSON ingested into inputs.signals.",
-                "details": {"signal_count": len(signals)},
+                "details": {"signal_count": metrics["signal_count"]},
                 "signals": signal_ids
             }
         )
@@ -203,10 +233,11 @@ def main(argv: list[str]) -> int:
     data.setdefault("inputs", {})
     data["inputs"]["signals"] = signals
 
-    # Outputs: explanations + evidence (stable structures)
+    # Outputs: explanations + evidence + metrics (stable structures)
     data.setdefault("outputs", {})
     data["outputs"]["explanations"] = baseline_explanations(signals)
     data["outputs"]["evidence"] = baseline_evidence(signals, signals_path)
+    data["outputs"]["metrics"] = compute_metrics(signals)
 
     save_json(output_path, data)
     print(f"[ok] wrote {output_path}")
