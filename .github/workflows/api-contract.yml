@@ -1,0 +1,32 @@
+name: API Contract (v1)
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Generate placeholder v1 output
+        run: |
+          mkdir -p api/out
+          cp api/example_output.v1.json api/out/godscore.output.v1.json
+
+      - name: Validate v1 output against contract
+        run: |
+          python api/validate_v1.py api/schema.v1.json api/out/godscore.output.v1.json
+
+      - name: Upload output artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: godscore-output-v1
+          path: api/out/godscore.output.v1.json
