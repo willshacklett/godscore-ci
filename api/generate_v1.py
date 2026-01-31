@@ -7,12 +7,8 @@ Minimal generator for godscore-ci API v1 output.
 - Injects context from env vars (GitHub Actions-friendly)
 - Optionally reads signals from a JSON file (GODSCORE_SIGNALS_PATH)
 - Emits baseline machine-readable explanations (outputs.explanations[])
+- Emits baseline machine-readable evidence (outputs.evidence[])
 - Writes a fully-formed v1 output JSON
-
-Usage:
-  python api/generate_v1.py api/example_output.v1.json api/out/godscore.output.v1.json
-Optional:
-  export GODSCORE_SIGNALS_PATH=api/example_signals.v1.json
 """
 
 from __future__ import annotations
@@ -72,20 +68,22 @@ def load_signals(path: str) -> list[dict[str, Any]]:
     return []
 
 
-def baseline_explanations(signals: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """
-    Machine-readable explanations. No vibes, no prose walls.
-    Keep IDs stable so downstream tooling can rely on them.
-    """
-    signal_ids: list[str] = []
+def _signal_ids(signals: list[dict[str, Any]]) -> list[str]:
+    ids: list[str] = []
     for s in signals:
         sid = s.get("id")
         if isinstance(sid, str) and sid:
-            signal_ids.append(sid)
+            ids.append(sid)
+    return ids
 
-    explanations: list[dict[str, Any]] = []
 
-    explanations.append(
+def baseline_explanations(signals: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """
+    Machine-readable explanations. IDs must remain stable.
+    """
+    signal_ids = _signal_ids(signals)
+
+    return [
         {
             "id": "explain.api.contract.v1",
             "kind": "system",
@@ -93,10 +91,7 @@ def baseline_explanations(signals: list[dict[str, Any]]) -> list[dict[str, Any]]
             "message": "API v1 contract output generated.",
             "details": {"contract_version": "1.0.0"},
             "signals": []
-        }
-    )
-
-    explanations.append(
+        },
         {
             "id": "explain.inputs.signals.ingested",
             "kind": "system",
@@ -104,10 +99,7 @@ def baseline_explanations(signals: list[dict[str, Any]]) -> list[dict[str, Any]]
             "message": "Signals ingested into inputs.signals.",
             "details": {"signal_count": len(signals)},
             "signals": signal_ids
-        }
-    )
-
-    explanations.append(
+        },
         {
             "id": "explain.score.placeholder",
             "kind": "system",
@@ -115,10 +107,7 @@ def baseline_explanations(signals: list[dict[str, Any]]) -> list[dict[str, Any]]
             "message": "Score is placeholder (0). Scoring logic not enabled yet.",
             "details": {"score": 0, "status": "placeholder"},
             "signals": []
-        }
-    )
-
-    explanations.append(
+        },
         {
             "id": "explain.enforcement.disabled",
             "kind": "enforcement",
@@ -127,9 +116,58 @@ def baseline_explanations(signals: list[dict[str, Any]]) -> list[dict[str, Any]]
             "details": {"enforcement": "disabled"},
             "signals": []
         }
+    ]
+
+
+def baseline_evidence(signals: list[dict[str, Any]], signals_path: str) -> list[dict[str, Any]]:
+    """
+    Evidence is 'proof pointers' — files/urls/artifacts/metrics that back explanations.
+    Keep it minimal and stable in v1.
+    """
+    signal_ids = _signal_ids(signals)
+
+    evidence: list[dict[str, Any]] = []
+
+    # Evidence: the emitted output itself (artifact path is stable in our workflows)
+    evidence.append(
+        {
+            "id": "evidence.output.file",
+            "kind": "file",
+            "source": "ci",
+            "locator": "api/out/godscore.output.v1.json",
+            "summary": "Generated API v1 output JSON.",
+            "details": {},
+            "signals": []
+        }
     )
 
-    return explanations
+    # Evidence: signals file if provided
+    if signals_path:
+        evidence.append(
+            {
+                "id": "evidence.inputs.signals.file",
+                "kind": "file",
+                "source": "repo",
+                "locator": signals_path,
+                "summary": "Signals JSON ingested into inputs.signals.",
+                "details": {"signal_count": len(signals)},
+                "signals": signal_ids
+            }
+        )
+    else:
+        evidence.append(
+            {
+                "id": "evidence.inputs.signals.none",
+                "kind": "metric",
+                "source": "system",
+                "locator": "inputs.signals",
+                "summary": "No signals file provided; inputs.signals is empty.",
+                "details": {"signal_count": 0},
+                "signals": []
+            }
+        )
+
+    return evidence
 
 
 def main(argv: list[str]) -> int:
@@ -165,10 +203,11 @@ def main(argv: list[str]) -> int:
     data.setdefault("inputs", {})
     data["inputs"]["signals"] = signals
 
-    # Outputs: baseline explanations (stable structure)
+    # Outputs: explanations + evidence (stable structures)
     data.setdefault("outputs", {})
-    data["outputs"].setdefault("explanations", [])
+
     data["outputs"]["explanations"] = baseline_explanations(signals)
+    data["outputs"]["evidence"] = baseline_evidence(signals, signals_path)
 
     save_json(output_path, data)
     print(f"[ok] wrote {output_path}")
