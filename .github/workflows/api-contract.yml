@@ -7,6 +7,7 @@ on:
 jobs:
   contract:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -21,6 +22,11 @@ jobs:
           mkdir -p api/out
           export GODSCORE_SIGNALS_PATH=api/example_signals.v1.json
           python api/generate_v1.py api/example_output.v1.json api/out/godscore.output.v1.json
+
+      # 🔹 STEP 14 — Human-readable CI summary
+      - name: Render GodScore summary
+        run: |
+          python api/render_summary.py api/out/godscore.output.v1.json
 
       - name: Validate v1 output against contract
         run: |
