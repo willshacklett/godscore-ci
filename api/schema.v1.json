@@ -1,0 +1,26 @@
+{
+  "version": "1.0.0",
+  "generated_at": "ISO-8601",
+  "subject": {
+    "type": "string",
+    "id": "string"
+  },
+  "context": {
+    "repo": "string",
+    "ref": "string",
+    "sha": "string",
+    "run_id": "string"
+  },
+  "inputs": {
+    "signals": []
+  },
+  "outputs": {
+    "score": 0,
+    "grade": "UNKNOWN",
+    "threshold": 0,
+    "pass": false,
+    "explanations": [],
+    "evidence": [],
+    "metrics": {}
+  }
+}
