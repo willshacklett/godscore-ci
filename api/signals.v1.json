@@ -1,0 +1,14 @@
+{
+  "version": "1.0.0",
+  "signals": [
+    {
+      "id": "string",
+      "type": "string",
+      "severity": "info",
+      "source": "string",
+      "ts": "ISO-8601",
+      "message": "string",
+      "meta": {}
+    }
+  ]
+}
