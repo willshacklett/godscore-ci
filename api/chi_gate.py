@@ -2,7 +2,7 @@
 """
 api/chi_gate.py
 
-Policy-aware optional CHI enforcement gate.
+Tier-aware optional CHI enforcement gate.
 
 Reads:
 - API v1 output JSON (generated artifact)
@@ -12,7 +12,7 @@ Behavior:
 - If GODSCORE_CHI_ENFORCE=false -> PASS
 - If enforce=true:
     - If chi_status == drifting:
-        - Fail ONLY if any drifted policy is marked must_enforce=true
+        - Fail ONLY if any drifted policy has tier >= GODSCORE_CHI_MIN_TIER
     - Otherwise PASS
 
 Usage:
@@ -22,6 +22,7 @@ Env:
   GODSCORE_CHI_ENFORCE=true|false        (default false)
   GODSCORE_CHI_ALLOW_UNKNOWN=true|false  (default true)
   GODSCORE_POLICY_PATH=path              (default api/policy.v1.json)
+  GODSCORE_CHI_MIN_TIER=int              (default 2)
 """
 
 from __future__ import annotations
@@ -29,7 +30,7 @@ from __future__ import annotations
 import json
 import os
 import sys
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 
 def load_json(path: str) -> Dict[str, Any]:
@@ -48,6 +49,16 @@ def env_bool(name: str, default: bool) -> bool:
     return v in ("1", "true", "yes", "y", "on")
 
 
+def env_int(name: str, default: int) -> int:
+    v = os.getenv(name)
+    if v is None or v.strip() == "":
+        return default
+    try:
+        return int(v.strip())
+    except Exception:
+        return default
+
+
 def safe_get(d: Any, keys: List[str], default: Any) -> Any:
     cur = d
     for k in keys:
@@ -57,11 +68,11 @@ def safe_get(d: Any, keys: List[str], default: Any) -> Any:
     return cur
 
 
-def load_policies(path: str) -> Dict[str, Dict[str, Any]]:
+def load_policy_index(path: str) -> Dict[str, Dict[str, Any]]:
     """
-    Returns a dict index {policy_id: policy_obj}
+    Returns {policy_id: policy_obj}
     Accepts:
-      { "policies": [ { "id": "...", "must_enforce": true/false, ... } ] }
+      { "policies": [ { "id": "...", "tier": 0..3, ... } ] }
     """
     try:
         data = load_json(path)
@@ -84,15 +95,31 @@ def load_policies(path: str) -> Dict[str, Dict[str, Any]]:
     return idx
 
 
+def policy_tier(policy_obj: Optional[Dict[str, Any]]) -> int:
+    if not isinstance(policy_obj, dict):
+        return 0
+    t = policy_obj.get("tier", 0)
+    if isinstance(t, bool):
+        return 0
+    if isinstance(t, int):
+        return t
+    try:
+        return int(t)
+    except Exception:
+        return 0
+
+
 def main(argv: List[str]) -> int:
     if len(argv) != 2:
         print("Usage: python api/chi_gate.py <output.json>")
         return 1
 
     out_path = argv[1]
+
     enforce = env_bool("GODSCORE_CHI_ENFORCE", False)
     allow_unknown = env_bool("GODSCORE_CHI_ALLOW_UNKNOWN", True)
     policy_path = os.getenv("GODSCORE_POLICY_PATH", "api/policy.v1.json")
+    min_tier = env_int("GODSCORE_CHI_MIN_TIER", 2)
 
     data = load_json(out_path)
 
@@ -109,11 +136,11 @@ def main(argv: List[str]) -> int:
     if not isinstance(drift_ids, list):
         drift_ids = []
 
-    # print what we saw (useful even when not enforcing)
     print("[chi-gate] repo:", repo)
     print("[chi-gate] sha:", sha)
     print("[chi-gate] enforce:", enforce)
     print("[chi-gate] policy_path:", policy_path)
+    print("[chi-gate] min_tier:", min_tier)
     print("[chi-gate] status:", chi_status)
     print("[chi-gate] ratio:", chi_ratio)
     print("[chi-gate] drifted_policies:", drift_ids)
@@ -130,34 +157,34 @@ def main(argv: List[str]) -> int:
         print("[chi-gate] CHI not drifting -> PASS")
         return 0
 
-    # CHI drifting: enforce only on must_enforce policies
-    pol_idx = load_policies(policy_path)
+    # CHI drifting: enforce only for drifted policies at/above min tier
+    pol_idx = load_policy_index(policy_path)
 
-    must_enforce_hits: List[str] = []
-    unknown_policies: List[str] = []
+    hits: List[str] = []
+    unknown: List[str] = []
 
     for pid in drift_ids:
         if not isinstance(pid, str) or not pid:
             continue
-        p = pol_idx.get(pid)
-        if p is None:
-            unknown_policies.append(pid)
+        pobj = pol_idx.get(pid)
+        if pobj is None:
+            unknown.append(pid)
             continue
-        me = p.get("must_enforce", False)
-        if isinstance(me, bool) and me:
-            must_enforce_hits.append(pid)
+        t = policy_tier(pobj)
+        if t >= min_tier:
+            hits.append(pid)
 
-    if must_enforce_hits:
-        print("[chi-gate] FAIL: drift includes must_enforce policies:")
-        for pid in must_enforce_hits:
-            print(" -", pid)
+    if hits:
+        print("[chi-gate] FAIL: drift includes policies at/above min tier:")
+        for pid in hits:
+            t = policy_tier(pol_idx.get(pid))
+            print(f" - {pid} (tier {t})")
         return 1
 
-    # If drifting but only non-must policies drifted, allow
-    print("[chi-gate] PASS: drifting only on non-must policies")
-    if unknown_policies:
-        print("[chi-gate] note: drifted policies not found in policy file (treated as non-must):")
-        for pid in unknown_policies:
+    print("[chi-gate] PASS: drifting only below min tier")
+    if unknown:
+        print("[chi-gate] note: drifted policies not found in policy file (treated as tier 0):")
+        for pid in unknown:
             print(" -", pid)
     return 0
 
