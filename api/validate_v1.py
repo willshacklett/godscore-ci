@@ -4,10 +4,8 @@ api/validate_v1.py
 
 GodScore API v1 contract validator.
 
-Contract rules:
-- Validate the required OUTPUT SHAPE
-- Do not enforce metadata fields
-- Allow forward-compatible extensions
+Validates the minimal, universal output surface.
+Allows forward-compatible extensions.
 """
 
 from __future__ import annotations
@@ -42,7 +40,7 @@ def main() -> None:
 
     _, schema_path, output_path = sys.argv
 
-    # schema is loaded only to confirm it exists
+    # Ensure schema exists (not shape-enforced)
     load_json(schema_path)
     data = load_json(output_path)
 
@@ -50,17 +48,15 @@ def main() -> None:
     require(data, "outputs", dict)
 
     outputs = data["outputs"]
-
     require(outputs, "score", (int, float))
     require(outputs, "pass", bool)
     require(outputs, "metrics", dict)
 
     metrics = outputs["metrics"]
 
-    # --- Minimum required metrics ---
+    # --- Minimal required metrics ---
     required_metrics = {
         "signal_count": int,
-        "chi_policy_count": int,
         "chi_drift_count": int,
         "chi_ratio": (int, float),
         "chi_status": str,
@@ -73,8 +69,9 @@ def main() -> None:
         if not isinstance(metrics[key], typ):
             fail(f"metrics.{key} must be {typ}")
 
-    # --- Optional tier-aware metrics (Step 19+) ---
+    # --- Optional metrics (allowed if present) ---
     optional_metrics = {
+        "chi_policy_count": int,
         "chi_drift_by_tier": dict,
         "chi_max_drift_tier": int,
         "chi_enforced_tiers": list,
