@@ -1,0 +1,14 @@
+{
+  "version": "1.0.0",
+  "evidence": [
+    {
+      "id": "string",
+      "kind": "string",
+      "source": "string",
+      "locator": "string",
+      "summary": "string",
+      "details": {},
+      "signals": []
+    }
+  ]
+}
