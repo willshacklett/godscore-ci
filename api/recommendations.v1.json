@@ -1,0 +1,14 @@
+{
+  "version": "1.0.0",
+  "recommendations": [
+    {
+      "id": "string",
+      "kind": "string",
+      "severity": "low",
+      "message": "string",
+      "details": {},
+      "policies": [],
+      "evidence": []
+    }
+  ]
+}
