@@ -16,9 +16,10 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Generate v1 output (env-backed)
+      - name: Generate v1 output (env + signals)
         run: |
           mkdir -p api/out
+          export GODSCORE_SIGNALS_PATH=api/example_signals.v1.json
           python api/generate_v1.py api/example_output.v1.json api/out/godscore.output.v1.json
 
       - name: Validate v1 output against contract
