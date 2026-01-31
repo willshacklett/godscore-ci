@@ -15,13 +15,10 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build-attestation:
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      # ------------------------------------------------------------
-      # Checkout source
-      # ------------------------------------------------------------
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -30,9 +27,6 @@ jobs:
         with:
           python-version: "3.11"
 
-      # ------------------------------------------------------------
-      # Build GodScore output
-      # ------------------------------------------------------------
       - name: Generate v1 output
         run: |
           mkdir -p api/out
@@ -52,9 +46,6 @@ jobs:
             api/out/godscore.output.v1.json \
             pages/.well-known/godscore.json
 
-      # ------------------------------------------------------------
-      # Keyless Sigstore signing
-      # ------------------------------------------------------------
       - name: Install cosign
         uses: sigstore/cosign-installer@v3
 
@@ -64,20 +55,26 @@ jobs:
             --bundle pages/.well-known/godscore.sigstore.json \
             pages/.well-known/godscore.json
 
-      # Convenience copies
-      - name: Copy root-level files
+      - name: Root-level convenience copies
         run: |
           cp pages/.well-known/godscore.json pages/godscore.json
           cp pages/.well-known/godscore.sig pages/godscore.sig
           cp pages/.well-known/godscore.sigstore.json pages/godscore.sigstore.json
 
-      # ------------------------------------------------------------
-      # Publish to GitHub Pages (CORRECT METHOD)
-      # ------------------------------------------------------------
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: pages
 
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+
+    environment:
+      name: github-pages   # 🔑 THIS IS THE REQUIRED FIX
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
       - name: Deploy Pages
+        id: deployment
         uses: actions/deploy-pages@v4
