@@ -7,6 +7,7 @@ Validates that a JSON payload OR schema:
 - is valid JSON
 - contains required keys
 - has correct top-level types
+- explanations[] and evidence[] are structured objects
 """
 
 from __future__ import annotations
@@ -127,7 +128,43 @@ def validate(payload: Dict[str, Any]) -> bool:
             err(f"outputs.explanations[{i}].signals must be a list")
             return False
 
+    # evidence must be a list of objects with required keys
+    evs = payload["outputs"]["evidence"]
+    if not require_type(evs, list, "outputs.evidence"):
+        return False
+
+    for i, ev in enumerate(evs):
+        if not isinstance(ev, dict):
+            err(f"outputs.evidence[{i}] must be an object")
+            return False
+        for k in ["id", "kind", "source", "locator", "summary", "details", "signals"]:
+            if k not in ev:
+                err(f"outputs.evidence[{i}] missing key: {k}")
+                return False
+        if not isinstance(ev["id"], str) or not ev["id"]:
+            err(f"outputs.evidence[{i}].id must be a non-empty string")
+            return False
+        if not isinstance(ev["kind"], str) or not ev["kind"]:
+            err(f"outputs.evidence[{i}].kind must be a non-empty string")
+            return False
+        if not isinstance(ev["source"], str) or not ev["source"]:
+            err(f"outputs.evidence[{i}].source must be a non-empty string")
+            return False
+        if not isinstance(ev["locator"], str) or not ev["locator"]:
+            err(f"outputs.evidence[{i}].locator must be a non-empty string")
+            return False
+        if not isinstance(ev["summary"], str) or not ev["summary"]:
+            err(f"outputs.evidence[{i}].summary must be a non-empty string")
+            return False
+        if not isinstance(ev["details"], dict):
+            err(f"outputs.evidence[{i}].details must be an object")
+            return False
+        if not isinstance(ev["signals"], list):
+            err(f"outputs.evidence[{i}].signals must be a list")
+            return False
+
     return True
+
 
 def main(argv: List[str]) -> int:
     if len(argv) != 3:
