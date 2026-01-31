@@ -1,0 +1,21 @@
+{
+  "version": "1.0.0",
+  "todos": [
+    {
+      "id": "string",
+      "title": "string",
+      "priority": "low",
+      "status": "open",
+      "actions": [
+        {
+          "type": "string",
+          "target": "string",
+          "payload": {}
+        }
+      ],
+      "policy": "string",
+      "evidence_kind": "string",
+      "evidence_locator": "string"
+    }
+  ]
+}
