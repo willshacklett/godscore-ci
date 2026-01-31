@@ -1,0 +1,60 @@
+name: GodScore Attestation (GitHub Pages)
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish_attestation:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Generate v1 output (env + signals)
+        run: |
+          mkdir -p api/out
+          export GODSCORE_SIGNALS_PATH=api/example_signals.v1.json
+          python api/generate_v1.py api/example_output.v1.json api/out/godscore.output.v1.json
+
+      - name: Validate v1 output against contract
+        run: |
+          python api/validate_v1.py api/schema.v1.json api/out/godscore.output.v1.json
+
+      - name: Build attestation
+        run: |
+          mkdir -p attestation
+          python api/build_attestation.py api/out/godscore.output.v1.json attestation/godscore.json
+
+      - name: Checkout gh-pages
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: pages
+
+      - name: Write attestation into Pages
+        run: |
+          mkdir -p pages/.well-known
+          cp attestation/godscore.json pages/.well-known/godscore.json
+          cp attestation/godscore.json pages/godscore.json
+          # Ensure dotfiles are served by Pages
+          touch pages/.nojekyll
+
+      - name: Commit and push to gh-pages
+        run: |
+          cd pages
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .well-known/godscore.json godscore.json .nojekyll
+          git commit -m "chore: publish godscore attestation" || echo "No changes to commit"
+          git push
