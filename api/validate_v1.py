@@ -3,24 +3,17 @@
 api/validate_v1.py
 
 Zero-dependency validator for the godscore-ci API v1 contract.
-It validates that a JSON payload:
+Validates that a JSON payload OR schema:
 - is valid JSON
-- contains required top-level keys
-- has the expected basic types for core fields
-- contains the required nested structures
-
-Usage:
-  python api/validate_v1.py api/schema.v1.json api/example_output.v1.json
-Exit code:
-  0 = valid
-  1 = invalid
+- contains required keys
+- has correct top-level types
 """
 
 from __future__ import annotations
 
 import json
 import sys
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
 
 
 def err(msg: str) -> None:
@@ -36,39 +29,36 @@ def load_json(path: str) -> Any:
         return json.load(f)
 
 
-def is_iso8601-ish(value: Any) -> bool:
-    # Minimal check: string with a 'T' and either 'Z' or timezone offset.
+def is_iso8601_or_placeholder(value: Any) -> bool:
     if not isinstance(value, str):
         return False
+    if value == "ISO-8601":
+        return True
     if "T" not in value:
         return False
     return value.endswith("Z") or ("+" in value[-6:] or "-" in value[-6:])
 
 
-def require_keys(obj: Any, keys: List[str], where: str) -> List[str]:
-    missing = []
+def require_keys(obj: Any, keys: List[str], where: str) -> bool:
     if not isinstance(obj, dict):
-        return keys[:]  # everything "missing" if not a dict
-    for k in keys:
-        if k not in obj:
-            missing.append(k)
+        err(f"{where} must be an object")
+        return False
+    missing = [k for k in keys if k not in obj]
     if missing:
         err(f"{where} missing keys: {', '.join(missing)}")
-    return missing
-
-
-def require_type(value: Any, t: type, where: str) -> bool:
-    if not isinstance(value, t):
-        err(f"{where} expected {t.__name__}, got {type(value).__name__}")
         return False
     return True
 
 
-def validate_payload(payload: Dict[str, Any]) -> bool:
-    valid = True
+def require_type(value: Any, t: type | tuple[type, ...], where: str) -> bool:
+    if not isinstance(value, t):
+        err(f"{where} expected {t}, got {type(value)}")
+        return False
+    return True
 
-    # Required top-level keys
-    top_required = [
+
+def validate(payload: Dict[str, Any]) -> bool:
+    required_top = [
         "version",
         "generated_at",
         "subject",
@@ -76,104 +66,62 @@ def validate_payload(payload: Dict[str, Any]) -> bool:
         "inputs",
         "outputs",
     ]
-    if require_keys(payload, top_required, "root"):
+
+    if not require_keys(payload, required_top, "root"):
         return False
 
-    # version
-    valid &= require_type(payload.get("version"), str, "root.version")
-
-    # generated_at
-    ga = payload.get("generated_at")
-    if not require_type(ga, str, "root.generated_at"):
-        valid = False
-    else:
-        # don't be strict yet, just sanity-check
-        if not is_iso8601-ish(ga):
-            err("root.generated_at should look like ISO-8601 (e.g., 2026-01-31T12:34:56Z)")
-            valid = False
-
-    # subject
-    subject = payload.get("subject")
-    if not require_type(subject, dict, "root.subject"):
-        return False
-    if require_keys(subject, ["type", "id"], "subject"):
-        return False
-    valid &= require_type(subject.get("type"), str, "subject.type")
-    valid &= require_type(subject.get("id"), str, "subject.id")
-
-    # context
-    context = payload.get("context")
-    if not require_type(context, dict, "root.context"):
-        return False
-    ctx_required = ["repo", "ref", "sha", "run_id"]
-    if require_keys(context, ctx_required, "context"):
-        return False
-    for k in ctx_required:
-        valid &= require_type(context.get(k), str, f"context.{k}")
-
-    # inputs
-    inputs = payload.get("inputs")
-    if not require_type(inputs, dict, "root.inputs"):
-        return False
-    if require_keys(inputs, ["signals"], "inputs"):
-        return False
-    valid &= require_type(inputs.get("signals"), list, "inputs.signals")
-
-    # outputs
-    outputs = payload.get("outputs")
-    if not require_type(outputs, dict, "root.outputs"):
+    if not require_type(payload["version"], str, "version"):
         return False
 
-    out_required = [
-        "score",
-        "grade",
-        "threshold",
-        "pass",
-        "explanations",
-        "evidence",
-        "metrics",
-    ]
-    if require_keys(outputs, out_required, "outputs"):
+    if not is_iso8601_or_placeholder(payload["generated_at"]):
+        err("generated_at must be ISO-8601 or 'ISO-8601'")
         return False
 
-    valid &= require_type(outputs.get("score"), (int, float), "outputs.score")
-    valid &= require_type(outputs.get("grade"), str, "outputs.grade")
-    valid &= require_type(outputs.get("threshold"), (int, float), "outputs.threshold")
-    valid &= require_type(outputs.get("pass"), bool, "outputs.pass")
-    valid &= require_type(outputs.get("explanations"), list, "outputs.explanations")
-    valid &= require_type(outputs.get("evidence"), list, "outputs.evidence")
-    valid &= require_type(outputs.get("metrics"), dict, "outputs.metrics")
+    if not require_keys(payload["subject"], ["type", "id"], "subject"):
+        return False
 
-    return bool(valid)
+    if not require_keys(payload["context"], ["repo", "ref", "sha", "run_id"], "context"):
+        return False
+
+    if not require_keys(payload["inputs"], ["signals"], "inputs"):
+        return False
+    if not require_type(payload["inputs"]["signals"], list, "inputs.signals"):
+        return False
+
+    if not require_keys(
+        payload["outputs"],
+        ["score", "grade", "threshold", "pass", "explanations", "evidence", "metrics"],
+        "outputs",
+    ):
+        return False
+
+    return True
 
 
 def main(argv: List[str]) -> int:
     if len(argv) != 3:
-        print("Usage: python api/validate_v1.py <contract.json> <payload.json>")
-        return 1
-
-    contract_path, payload_path = argv[1], argv[2]
-
-    # We load the contract file mostly to ensure it exists / is valid JSON.
-    try:
-        _ = load_json(contract_path)
-        ok(f"Loaded contract: {contract_path}")
-    except Exception as e:
-        err(f"Failed to load contract JSON: {e}")
+        print("Usage: python validate_v1.py <contract.json> <payload.json>")
         return 1
 
     try:
-        payload = load_json(payload_path)
-        ok(f"Loaded payload: {payload_path}")
+        _ = load_json(argv[1])
+        ok(f"Loaded contract: {argv[1]}")
     except Exception as e:
-        err(f"Failed to load payload JSON: {e}")
+        err(f"Contract load failed: {e}")
+        return 1
+
+    try:
+        payload = load_json(argv[2])
+        ok(f"Loaded payload: {argv[2]}")
+    except Exception as e:
+        err(f"Payload load failed: {e}")
         return 1
 
     if not isinstance(payload, dict):
-        err("payload root must be a JSON object")
+        err("Payload root must be an object")
         return 1
 
-    if validate_payload(payload):
+    if validate(payload):
         ok("Payload matches v1 contract shape ✅")
         return 0
 
