@@ -9,6 +9,7 @@ Validates that a JSON payload OR schema:
 - has correct top-level types
 - explanations[] and evidence[] are structured objects
 - recommendations[] (optional) is structured if present
+- todos[] (optional) is structured if present
 """
 
 from __future__ import annotations
@@ -202,6 +203,62 @@ def validate(payload: Dict[str, Any]) -> bool:
                 return False
             if not isinstance(rec["evidence"], list):
                 err(f"outputs.recommendations[{i}].evidence must be a list")
+                return False
+
+    # todos[] is OPTIONAL, but if present must be valid
+    if "todos" in payload["outputs"]:
+        todos = payload["outputs"]["todos"]
+        if not require_type(todos, list, "outputs.todos"):
+            return False
+
+        for i, td in enumerate(todos):
+            if not isinstance(td, dict):
+                err(f"outputs.todos[{i}] must be an object")
+                return False
+            for k in ["id", "title", "priority", "status", "actions", "policy", "evidence_kind", "evidence_locator"]:
+                if k not in td:
+                    err(f"outputs.todos[{i}] missing key: {k}")
+                    return False
+            if not isinstance(td["id"], str) or not td["id"]:
+                err(f"outputs.todos[{i}].id must be a non-empty string")
+                return False
+            if not isinstance(td["title"], str) or not td["title"]:
+                err(f"outputs.todos[{i}].title must be a non-empty string")
+                return False
+            if not isinstance(td["priority"], str) or not td["priority"]:
+                err(f"outputs.todos[{i}].priority must be a non-empty string")
+                return False
+            if not isinstance(td["status"], str) or not td["status"]:
+                err(f"outputs.todos[{i}].status must be a non-empty string")
+                return False
+            if not isinstance(td["actions"], list):
+                err(f"outputs.todos[{i}].actions must be a list")
+                return False
+            for j, act in enumerate(td["actions"]):
+                if not isinstance(act, dict):
+                    err(f"outputs.todos[{i}].actions[{j}] must be an object")
+                    return False
+                for ak in ["type", "target", "payload"]:
+                    if ak not in act:
+                        err(f"outputs.todos[{i}].actions[{j}] missing key: {ak}")
+                        return False
+                if not isinstance(act["type"], str) or not act["type"]:
+                    err(f"outputs.todos[{i}].actions[{j}].type must be a non-empty string")
+                    return False
+                if not isinstance(act["target"], str) or not act["target"]:
+                    err(f"outputs.todos[{i}].actions[{j}].target must be a non-empty string")
+                    return False
+                if not isinstance(act["payload"], dict):
+                    err(f"outputs.todos[{i}].actions[{j}].payload must be an object")
+                    return False
+            if not isinstance(td["policy"], str) or not td["policy"]:
+                err(f"outputs.todos[{i}].policy must be a non-empty string")
+                return False
+            if not isinstance(td["evidence_kind"], str) or not td["evidence_kind"]:
+                err(f"outputs.todos[{i}].evidence_kind must be a non-empty string")
+                return False
+            if not isinstance(td["evidence_locator"], str) or not td["evidence_locator"]:
+                err(f"outputs.todos[{i}].evidence_locator must be a non-empty string")
                 return False
 
     return True
