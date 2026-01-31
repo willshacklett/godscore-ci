@@ -13,6 +13,7 @@ Minimal generator for godscore-ci API v1 output.
   - outputs.metrics{} (stable aggregates)
   - outputs.metrics.chi_* (Constraint Honesty metrics + status)
   - outputs.recommendations[] (policy-specific next steps)
+  - outputs.todos[] (automation-ready tasks)
 """
 
 from __future__ import annotations
@@ -288,15 +289,10 @@ def build_recommendations(
     policies: list[dict[str, Any]],
     evidence: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
-    """
-    Policy-specific recommendations:
-    - For each drifted policy, suggest adding matching evidence (kind + locator).
-    """
     drifted = chi.get("chi_drift_policy_ids", [])
     if not isinstance(drifted, list):
         drifted = []
 
-    # index policies by id
     pol_index: dict[str, dict[str, Any]] = {}
     for p in policies:
         pid = p.get("id")
@@ -369,7 +365,6 @@ def build_recommendations(
             }
         )
 
-    # also include a roll-up recommendation
     recs.insert(
         0,
         {
@@ -384,6 +379,87 @@ def build_recommendations(
     )
 
     return recs
+
+
+def build_todos(policies: list[dict[str, Any]], chi: dict[str, Any]) -> list[dict[str, Any]]:
+    """
+    Automation-ready tasks.
+    One todo per drifted policy with an action that can be automated later.
+    """
+    drifted = chi.get("chi_drift_policy_ids", [])
+    if not isinstance(drifted, list):
+        drifted = []
+
+    # index policies by id
+    pol_index: dict[str, dict[str, Any]] = {}
+    for p in policies:
+        pid = p.get("id")
+        if isinstance(pid, str) and pid:
+            pol_index[pid] = p
+
+    todos: list[dict[str, Any]] = []
+
+    # If no policies, add a single todo to create them
+    if len(policies) == 0:
+        todos.append(
+            {
+                "id": "todo.chi.create_policy_file",
+                "title": "Create declared policies file for CHI",
+                "priority": "low",
+                "status": "open",
+                "actions": [
+                    {
+                        "type": "create_file",
+                        "target": "api/policy.v1.json",
+                        "payload": {
+                            "hint": "Add policy objects with id, description, evidence_kind, evidence_locator"
+                        }
+                    }
+                ],
+                "policy": "none",
+                "evidence_kind": "file",
+                "evidence_locator": "api/policy.v1.json"
+            }
+        )
+        return todos
+
+    # One todo per drifted policy
+    for pid in drifted:
+        if not isinstance(pid, str) or not pid:
+            continue
+        p = pol_index.get(pid, {})
+        ek = p.get("evidence_kind") if isinstance(p.get("evidence_kind"), str) else "ci_check"
+        el = p.get("evidence_locator") if isinstance(p.get("evidence_locator"), str) else "unknown"
+
+        safe_id = pid.replace(" ", "_").replace("/", "_").replace(":", "_")
+
+        todos.append(
+            {
+                "id": f"todo.chi.policy.{safe_id}.add_evidence",
+                "title": f"Add enforcement evidence for policy: {pid}",
+                "priority": "high" if chi.get("chi_status") == "drifting" else "medium",
+                "status": "open",
+                "actions": [
+                    {
+                        "type": "emit_evidence",
+                        "target": "outputs.evidence[]",
+                        "payload": {
+                            "id": f"evidence.enforcement.{safe_id}",
+                            "kind": ek,
+                            "source": "ci",
+                            "locator": el,
+                            "summary": f"Enforcement evidence for policy {pid}.",
+                            "details": {}
+                        }
+                    }
+                ],
+                "policy": pid,
+                "evidence_kind": ek,
+                "evidence_locator": el
+            }
+        )
+
+    return todos
 
 
 def main(argv: list[str]) -> int:
@@ -431,8 +507,9 @@ def main(argv: list[str]) -> int:
     data["outputs"]["explanations"] = baseline_explanations(signals, chi)
     data["outputs"]["evidence"] = evidence
 
-    # Recommendations (policy-specific)
+    # Recommendations + Todos
     data["outputs"]["recommendations"] = build_recommendations(chi, policies, evidence)
+    data["outputs"]["todos"] = build_todos(policies, chi)
 
     # Metrics: base + CHI
     metrics = compute_metrics(signals)
