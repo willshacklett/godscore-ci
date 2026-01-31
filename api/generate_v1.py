@@ -3,9 +3,10 @@
 api/generate_v1.py
 
 Minimal generator for godscore-ci API v1 output.
-- Reads a base template JSON (schema shape / example)
-- Injects context from environment variables (GitHub Actions-friendly)
-- Optionally reads signals from a signals JSON file (GODSCORE_SIGNALS_PATH)
+- Reads a base template JSON (schema/example)
+- Injects context from env vars (GitHub Actions-friendly)
+- Optionally reads signals from a JSON file (GODSCORE_SIGNALS_PATH)
+- Emits baseline machine-readable explanations (outputs.explanations[])
 - Writes a fully-formed v1 output JSON
 
 Usage:
@@ -51,7 +52,7 @@ def load_signals(path: str) -> list[dict[str, Any]]:
     Loads signals from a JSON file shaped like:
       { "version": "1.0.0", "signals": [ ... ] }
 
-    Returns [] if missing or invalid (we keep the generator resilient).
+    Returns [] if missing or invalid (generator stays resilient).
     """
     if not path:
         return []
@@ -59,7 +60,6 @@ def load_signals(path: str) -> list[dict[str, Any]]:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
         if isinstance(data, dict) and isinstance(data.get("signals"), list):
-            # Ensure each signal is an object
             out: list[dict[str, Any]] = []
             for s in data["signals"]:
                 if isinstance(s, dict):
@@ -70,6 +70,66 @@ def load_signals(path: str) -> list[dict[str, Any]]:
     except Exception:
         return []
     return []
+
+
+def baseline_explanations(signals: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """
+    Machine-readable explanations. No vibes, no prose walls.
+    Keep IDs stable so downstream tooling can rely on them.
+    """
+    signal_ids: list[str] = []
+    for s in signals:
+        sid = s.get("id")
+        if isinstance(sid, str) and sid:
+            signal_ids.append(sid)
+
+    explanations: list[dict[str, Any]] = []
+
+    explanations.append(
+        {
+            "id": "explain.api.contract.v1",
+            "kind": "system",
+            "severity": "info",
+            "message": "API v1 contract output generated.",
+            "details": {"contract_version": "1.0.0"},
+            "signals": []
+        }
+    )
+
+    explanations.append(
+        {
+            "id": "explain.inputs.signals.ingested",
+            "kind": "system",
+            "severity": "info",
+            "message": "Signals ingested into inputs.signals.",
+            "details": {"signal_count": len(signals)},
+            "signals": signal_ids
+        }
+    )
+
+    explanations.append(
+        {
+            "id": "explain.score.placeholder",
+            "kind": "system",
+            "severity": "info",
+            "message": "Score is placeholder (0). Scoring logic not enabled yet.",
+            "details": {"score": 0, "status": "placeholder"},
+            "signals": []
+        }
+    )
+
+    explanations.append(
+        {
+            "id": "explain.enforcement.disabled",
+            "kind": "enforcement",
+            "severity": "info",
+            "message": "Enforcement is not applied by this generator.",
+            "details": {"enforcement": "disabled"},
+            "signals": []
+        }
+    )
+
+    return explanations
 
 
 def main(argv: list[str]) -> int:
@@ -85,7 +145,6 @@ def main(argv: list[str]) -> int:
     sha = env("GITHUB_SHA", data.get("context", {}).get("sha", ""))
     run_id = env("GITHUB_RUN_ID", data.get("context", {}).get("run_id", "local"))
 
-    # Step 5 (B): optional signals path via env
     signals_path = env("GODSCORE_SIGNALS_PATH", "")
     signals = load_signals(signals_path) if signals_path else []
 
@@ -102,9 +161,14 @@ def main(argv: list[str]) -> int:
     data["subject"]["type"] = data["subject"].get("type", "repo") or "repo"
     data["subject"]["id"] = repo or data["subject"].get("id", "unknown")
 
-    # Step 5 (C): inject signals into inputs
+    # Inputs: signals
     data.setdefault("inputs", {})
     data["inputs"]["signals"] = signals
+
+    # Outputs: baseline explanations (stable structure)
+    data.setdefault("outputs", {})
+    data["outputs"].setdefault("explanations", [])
+    data["outputs"]["explanations"] = baseline_explanations(signals)
 
     save_json(output_path, data)
     print(f"[ok] wrote {output_path}")
