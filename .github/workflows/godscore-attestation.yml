@@ -38,26 +38,19 @@ jobs:
           mkdir -p attestation
           python api/build_attestation.py api/out/godscore.output.v1.json attestation/godscore.json
 
-      - name: Checkout gh-pages
-        uses: actions/checkout@v4
-        with:
-          ref: gh-pages
-          path: pages
-
-      - name: Write attestation into Pages
+      # 🔹 Write into Pages-served docs directory
+      - name: Publish attestation to docs/.well-known
         run: |
-          mkdir -p pages/.well-known
-          cp attestation/godscore.json pages/.well-known/godscore.json
-          cp attestation/godscore.json.sig pages/.well-known/godscore.sig
-          cp attestation/godscore.json pages/godscore.json
-          cp attestation/godscore.json.sig pages/godscore.sig
-          touch pages/.nojekyll
+          mkdir -p docs/.well-known
+          cp attestation/godscore.json docs/.well-known/godscore.json
+          cp attestation/godscore.json.sig docs/.well-known/godscore.sig
+          cp attestation/godscore.json docs/godscore.json
+          cp attestation/godscore.json.sig docs/godscore.sig
 
-      - name: Commit and push to gh-pages
+      - name: Commit and push
         run: |
-          cd pages
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add .well-known/godscore.json .well-known/godscore.sig godscore.json godscore.sig .nojekyll
+          git add docs/.well-known/godscore.json docs/.well-known/godscore.sig docs/godscore.json docs/godscore.sig
           git commit -m "chore: publish signed godscore attestation" || echo "No changes to commit"
           git push
