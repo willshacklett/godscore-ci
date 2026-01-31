@@ -4,21 +4,21 @@
     {
       "id": "policy.contract.v1.required",
       "description": "API v1 output must validate against contract",
-      "must_enforce": true,
+      "tier": 3,
       "evidence_kind": "ci_check",
       "evidence_locator": "API Contract (v1)"
     },
     {
       "id": "policy.explanations.required",
       "description": "outputs.explanations[] must exist and be structured",
-      "must_enforce": true,
+      "tier": 2,
       "evidence_kind": "ci_check",
       "evidence_locator": "API Contract (v1)"
     },
     {
       "id": "policy.evidence.required",
       "description": "outputs.evidence[] must exist and be structured",
-      "must_enforce": true,
+      "tier": 2,
       "evidence_kind": "ci_check",
       "evidence_locator": "API Contract (v1)"
     }
