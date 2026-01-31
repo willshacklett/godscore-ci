@@ -1,0 +1,13 @@
+{
+  "version": "1.0.0",
+  "explanations": [
+    {
+      "id": "string",
+      "kind": "string",
+      "severity": "info",
+      "message": "string",
+      "details": {},
+      "signals": []
+    }
+  ]
+}
