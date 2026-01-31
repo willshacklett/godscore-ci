@@ -31,11 +31,12 @@ jobs:
         run: |
           python api/validate_v1.py api/schema.v1.json api/out/godscore.output.v1.json
 
-      # 🔹 STEP 16 — Optional enforcement gate (default: OFF)
+      # 🔒 STEP 18 — Tier-aware CHI Gate (explicit, future-proof)
       - name: CHI Gate (optional)
         env:
-          GODSCORE_CHI_ENFORCE: "false"        # flip to "true" when you want enforcement
-          GODSCORE_CHI_ALLOW_UNKNOWN: "true"   # safe default
+          GODSCORE_CHI_ENFORCE: "false"      # flip to "true" when you want enforcement
+          GODSCORE_CHI_ALLOW_UNKNOWN: "true"
+          GODSCORE_CHI_MIN_TIER: "2"         # enforce drift for tier >= 2
         run: |
           python api/chi_gate.py api/out/godscore.output.v1.json
 
