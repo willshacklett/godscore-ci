@@ -2,16 +2,16 @@
 """
 api/generate_v1.py
 
-Step 19:
-- Export tier-aware CHI signals for external systems
+Step 19 FIX:
+- Extend existing output with tier-aware CHI metrics
+- Do NOT overwrite previously generated content
 """
 
 from __future__ import annotations
 
 import json
 import os
-from datetime import datetime, timezone
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 
 def load_json(path: str) -> Dict[str, Any]:
@@ -23,10 +23,6 @@ def save_json(path: str, data: Dict[str, Any]) -> None:
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
         f.write("\n")
-
-
-def iso_now() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def load_policies(path: str) -> Dict[str, Dict[str, Any]]:
@@ -50,15 +46,16 @@ def policy_tier(p: Dict[str, Any]) -> int:
 
 
 def main() -> None:
-    template = load_json("api/example_output.v1.json")
+    output_path = "api/out/godscore.output.v1.json"
     policy_path = os.getenv("GODSCORE_POLICY_PATH", "api/policy.v1.json")
+
+    data = load_json(output_path)
     policies = load_policies(policy_path)
 
-    template["generated_at"] = iso_now()
-    metrics = template["outputs"]["metrics"]
-
+    metrics = data.get("outputs", {}).get("metrics", {})
     drift_ids = metrics.get("chi_drift_policy_ids", [])
-    drift_by_tier: Dict[str, List[str]] = {}
+
+    drift_by_tier: Dict[str, list[str]] = {}
     enforced_tiers = set()
     max_tier = 0
 
@@ -75,7 +72,7 @@ def main() -> None:
     metrics["chi_max_drift_tier"] = max_tier
     metrics["chi_enforced_tiers"] = sorted(enforced_tiers)
 
-    save_json("api/out/godscore.output.v1.json", template)
+    save_json(output_path, data)
 
 
 if __name__ == "__main__":
