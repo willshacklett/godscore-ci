@@ -16,11 +16,28 @@
   },
   "outputs": {
     "score": 0,
-    "grade": "UNKNOWN",
+    "grade": "N/A",
     "threshold": 0,
-    "pass": false,
+    "pass": true,
     "explanations": [],
     "evidence": [],
-    "metrics": {}
+    "recommendations": [],
+    "todos": [],
+    "metrics": {
+      "signal_count": 0,
+      "signals_by_severity": {},
+      "chi_policy_count": 0,
+      "chi_enforced_count": 0,
+      "chi_drift_count": 0,
+      "chi_ratio": 0.0,
+      "chi_status": "unknown",
+      "chi_thresholds": {},
+      "chi_drift_policy_ids": [],
+
+      // 🔹 STEP 19 — Tier-aware exports
+      "chi_drift_by_tier": {},
+      "chi_max_drift_tier": 0,
+      "chi_enforced_tiers": []
+    }
   }
 }
