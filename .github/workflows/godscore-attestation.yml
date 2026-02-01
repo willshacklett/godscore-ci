@@ -8,7 +8,7 @@ on:
 permissions:
   contents: read
   pages: write
-  id-token: write   # required for keyless sigstore signing
+  id-token: write
 
 concurrency:
   group: github-pages
@@ -17,7 +17,6 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -49,7 +48,7 @@ jobs:
       - name: Install cosign
         uses: sigstore/cosign-installer@v3
 
-      - name: Sigstore sign attestation (writes bundle)
+      - name: Sigstore sign attestation (bundle)
         run: |
           cosign sign-blob --yes \
             --bundle pages/.well-known/godscore.sigstore.json \
@@ -60,27 +59,32 @@ jobs:
           cp pages/.well-known/godscore.json pages/godscore.json
           cp pages/.well-known/godscore.sigstore.json pages/godscore.sigstore.json
 
-      - name: Add root index.html (prevents Pages 404)
+      - name: Include dashboard in Pages artifact
         run: |
-          cat > pages/index.html <<'HTML'
+          cp -R dashboard pages/dashboard
+
+      - name: Add root index.html (prevents / 404)
+        run: |
+          cat > pages/index.html <<'EOF'
           <!doctype html>
           <html>
             <head>
               <meta charset="utf-8" />
-              <meta http-equiv="refresh" content="0; url=./dashboard/" />
               <meta name="viewport" content="width=device-width, initial-scale=1" />
               <title>godscore-ci</title>
             </head>
-            <body>
-              <p>Redirecting to <a href="./dashboard/">dashboard</a>…</p>
+            <body style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;">
+              <h1>godscore-ci</h1>
+              <ul>
+                <li><a href="./dashboard/">Dashboard</a></li>
+                <li><a href="./.well-known/godscore.json">Attestation (.well-known/godscore.json)</a></li>
+                <li><a href="./.well-known/godscore.sigstore.json">Sigstore bundle (.well-known/godscore.sigstore.json)</a></li>
+                <li><a href="./godscore.json">Convenience copy (root godscore.json)</a></li>
+                <li><a href="./godscore.sigstore.json">Convenience copy (root godscore.sigstore.json)</a></li>
+              </ul>
             </body>
           </html>
-          HTML
-
-      - name: Debug: list pages contents
-        run: |
-          echo "=== pages files ==="
-          find pages -maxdepth 4 -type f -print
+          EOF
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
@@ -90,11 +94,9 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     needs: build
-
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-
     steps:
       - name: Deploy Pages
         id: deployment
