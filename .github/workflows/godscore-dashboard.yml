@@ -1,229 +1,103 @@
-name: GodScore Dashboard (GitHub Pages)
+name: GodScore Pages (Dashboard + Attestation)
 
 on:
   push:
-    branches: ["main"]
-    paths-ignore:
-      - "dashboard/data/history.json"
-      - "dashboard/data/snapshot.json"
-  workflow_dispatch: {}
+    branches: [ main ]
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
   pages: write
   id-token: write
 
 concurrency:
-  group: "pages"
-  cancel-in-progress: true
+  group: github-pages
+  cancel-in-progress: false
 
 jobs:
-  build-and-deploy:
+  build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 1) Ensure dashboard data folder + history exists
-      - name: Ensure history.json
-        run: |
-          mkdir -p dashboard/data
-          if [ ! -f dashboard/data/history.json ]; then
-            echo "[]" > dashboard/data/history.json
-          fi
-
-      # 2) Python runtime
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      # 3) Install dependencies (repo deps + common QA tools)
-      - name: Install deps
+      # ----------------------------
+      # 1) Build the attestation JSON into pages/.well-known
+      # ----------------------------
+      - name: Generate v1 output
         run: |
-          python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          pip install pytest ruff
+          mkdir -p api/out
+          export GODSCORE_SIGNALS_PATH=api/example_signals.v1.json
+          python api/generate_v1.py api/example_output.v1.json api/out/godscore.output.v1.json
 
-      # 4) Run checks (non-blocking). We score from results.
-      - name: Run checks (capture outputs)
+      - name: Validate output
         run: |
-          set +e
-          mkdir -p dashboard/data
+          python api/validate_v1.py api/schema.v1.json api/out/godscore.output.v1.json
 
-          pytest -q > dashboard/data/pytest.out 2>&1
-          echo $? > dashboard/data/pytest.code
-
-          ruff check . > dashboard/data/ruff.out 2>&1
-          echo $? > dashboard/data/ruff.code
-
-          set -e
-          echo "Checks captured."
-
-      # 5) Generate snapshot.json:
-      #    - Try REAL GodScore engine first
-      #    - If not detected, fallback to QA-derived score (tests+lint)
-      - name: Generate snapshot (engine-first, QA fallback)
+      - name: Build attestation (HMAC)
+        env:
+          GODSCORE_ATTESTATION_HMAC: ${{ secrets.GODSCORE_ATTESTATION_HMAC }}
         run: |
-          python - << 'PY'
-          import json, os, datetime, subprocess, re
-          from pathlib import Path
+          mkdir -p pages/.well-known
+          python api/build_attestation.py \
+            api/out/godscore.output.v1.json \
+            pages/.well-known/godscore.json
 
-          def clamp(x):
-              try:
-                  x = float(x)
-              except Exception:
-                  return None
-              return max(0.0, min(100.0, x))
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
 
-          def read_int(path, default=1):
-              try:
-                  return int(Path(path).read_text().strip())
-              except Exception:
-                  return default
-
-          # ---- QA context ----
-          pytest_code = read_int("dashboard/data/pytest.code", 1)
-          ruff_code   = read_int("dashboard/data/ruff.code", 1)
-
-          ruff_findings = 0
-          try:
-              ruff_txt = Path("dashboard/data/ruff.out").read_text(errors="ignore")
-              ruff_findings = sum(1 for line in ruff_txt.splitlines() if line.strip())
-          except Exception:
-              pass
-
-          # ---- Attempt REAL engine ----
-          godscore = None
-          engine_details = {}
-
-          # OPTION A: Python function import
-          try:
-              try:
-                  from godscore import compute_godscore  # type: ignore
-                  val = compute_godscore()
-                  godscore = clamp(val)
-                  if godscore is not None:
-                      engine_details["source"] = "python_function:godscore.compute_godscore"
-              except Exception as e:
-                  engine_details["python_function_error"] = str(e)
-          except Exception as e:
-              engine_details["python_import_error"] = str(e)
-
-          # OPTION B: Known script candidates (if they exist)
-          if godscore is None:
-              candidates = ["godscore.py", "gv_gate.py", "godscore_ci.py"]
-              for cand in candidates:
-                  if Path(cand).exists():
-                      try:
-                          result = subprocess.run(
-                              ["python", cand],
-                              capture_output=True,
-                              text=True
-                          )
-                          engine_details["cli_candidate"] = cand
-                          engine_details["cli_returncode"] = result.returncode
-
-                          txt = (result.stdout or "") + "\n" + (result.stderr or "")
-                          # Grab first number that looks like a score
-                          m = re.search(r"(\d+(\.\d+)?)", txt)
-                          if result.returncode == 0 and m:
-                              godscore = clamp(m.group(1))
-                              if godscore is not None:
-                                  engine_details["source"] = f"cli:{cand}"
-                                  break
-                      except Exception as e:
-                          engine_details[f"cli_error_{cand}"] = str(e)
-
-          # OPTION C: JSON file candidates (if they exist)
-          if godscore is None:
-              json_candidates = ["godscore.json", "godscore_report.json", "report.json"]
-              for jc in json_candidates:
-                  if Path(jc).exists():
-                      try:
-                          data = json.loads(Path(jc).read_text())
-                          for key in ["godscore", "score", "GodScore", "GODSCORE"]:
-                              if key in data:
-                                  godscore = clamp(data[key])
-                                  if godscore is not None:
-                                      engine_details["source"] = f"json_file:{jc}:{key}"
-                                      break
-                          if godscore is not None:
-                              break
-                      except Exception as e:
-                          engine_details[f"json_error_{jc}"] = str(e)
-
-          # ---- Fallback: QA-derived score (so we NEVER show useless 0) ----
-          if godscore is None:
-              # Simple, transparent scoring scaffold:
-              # Start at 100
-              # - tests failing: -40
-              # - each ruff finding: -1 (cap -30)
-              score = 100
-              if pytest_code != 0:
-                  score -= 40
-              score -= min(30, ruff_findings)
-              score = max(0, min(100, score))
-
-              godscore = float(score)
-              engine_details["fallback"] = "qa_scaffold"
-              engine_details["note"] = "Engine not detected yet; using tests+lint derived score."
-
-          snapshot = {
-              "ts": datetime.datetime.utcnow().isoformat() + "Z",
-              "ref": os.environ.get("GITHUB_REF_NAME", "main"),
-              "sha": (os.environ.get("GITHUB_SHA","")[:7]),
-              "godscore": godscore,
-              "engine": engine_details,
-              "breakdown": {
-                  "tests_ok": pytest_code == 0,
-                  "ruff_ok": ruff_code == 0,
-                  "ruff_findings": ruff_findings
-              }
-          }
-
-          Path("dashboard/data/snapshot.json").write_text(json.dumps(snapshot, indent=2))
-          print("snapshot:", snapshot)
-          PY
-
-      # 6) Append snapshot to history.json (keep last 200)
-      - name: Append history
+      - name: Sigstore sign attestation (bundle)
         run: |
-          python - << 'PY'
-          import json
-          from pathlib import Path
+          cosign sign-blob --yes \
+            --bundle pages/.well-known/godscore.sigstore.json \
+            pages/.well-known/godscore.json
 
-          hist_path = Path("dashboard/data/history.json")
-          snap_path = Path("dashboard/data/snapshot.json")
-
-          hist = json.loads(hist_path.read_text())
-          snap = json.loads(snap_path.read_text())
-
-          if not any(x.get("sha") == snap.get("sha") for x in hist):
-              hist.append(snap)
-
-          hist = hist[-200:]
-          hist_path.write_text(json.dumps(hist, indent=2))
-          print("history entries:", len(hist))
-          PY
-
-      # 7) Commit history + snapshot back to main (avoid bot loops)
-      - name: Commit dashboard data
-        if: github.actor != 'github-actions[bot]'
+      # Optional convenience copies at root
+      - name: Root-level convenience copies
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add dashboard/data/history.json dashboard/data/snapshot.json || true
-          git commit -m "Update GodScore dashboard data" || echo "No changes"
-          git push || true
+          cp pages/.well-known/godscore.json pages/godscore.json
+          cp pages/.well-known/godscore.sigstore.json pages/godscore.sigstore.json
 
-      # 8) Upload site to Pages
+      # ----------------------------
+      # 2) Copy your existing dashboard into pages/dashboard/
+      # ----------------------------
+      - name: Copy dashboard site into Pages artifact
+        run: |
+          mkdir -p pages/dashboard
+          cp -R dashboard/* pages/dashboard/
+
+      # ----------------------------
+      # 3) Add a root index.html so /godscore-ci/ is not 404
+      # ----------------------------
+      - name: Add root index.html (redirect to dashboard)
+        run: |
+          cat > pages/index.html <<'EOF'
+          <!doctype html>
+          <meta charset="utf-8" />
+          <meta http-equiv="refresh" content="0; url=./dashboard/" />
+          <title>GodScore</title>
+          <p>Redirecting to <a href="./dashboard/">GodScore Dashboard</a>…</p>
+          EOF
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: pages
 
-      # 9) Deploy to Pages
-      - name: Deploy to GitHub Pages
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy Pages
+        id: deployment
         uses: actions/deploy-pages@v4
