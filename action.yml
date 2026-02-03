@@ -21,14 +21,19 @@ inputs:
 outputs:
   godscore:
     description: "Computed GodScore (0..1)."
+    value: ${{ steps.godscore_run.outputs.godscore }}
   gv:
     description: "Computed GV (0..1)."
+    value: ${{ steps.godscore_run.outputs.gv }}
   passed:
     description: "true if score >= threshold."
+    value: ${{ steps.godscore_run.outputs.passed }}
   effective_mode:
     description: "free or pro."
+    value: ${{ steps.godscore_run.outputs.effective_mode }}
   score_source:
     description: "manual or auto."
+    value: ${{ steps.godscore_run.outputs.score_source }}
 
 runs:
   using: "composite"
@@ -46,6 +51,7 @@ runs:
         if [ -f pyproject.toml ]; then pip install .; fi
 
     - name: "Run GodScore CI"
+      id: godscore_run
       shell: bash
       run: |
         python -m godscore_ci.action_main
