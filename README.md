@@ -1,3 +1,6 @@
+> **Start here (Hub):** https://github.com/willshacklett/god-variable-theory  
+> One-click ecosystem map • demos • CI enforcement • runtime monitoring
+
 # GodScore CI
 
 GodScore CI assigns a single, explainable trust score (0–100) to every commit and tracks how that trust changes over time.
