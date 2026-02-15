@@ -1,27 +1,32 @@
-from dataclasses import dataclass
+import scenarios
+from gv_runtime import GVState, gv_step
 
 
-@dataclass
-class GVState:
-    step: int = 0
-    baseline: float = 0.0
-    debt: float = 0.0
+def run(name, signal_series, decay=0.99):
+    state = GVState(step=0, baseline=signal_series[0], debt=0.0)
+    debt_curve = []
+
+    for s in signal_series:
+        state = gv_step(state, s, decay=decay)
+        debt_curve.append(state.debt)
+
+    return {
+        "scenario": name,
+        "final_debt": state.debt,
+        "max_debt": max(debt_curve),
+    }
 
 
-def gv_step(state: GVState, signal: float, decay: float = 0.99) -> GVState:
-    """
-    Single GV update step.
-    Debt increases as signal diverges from baseline.
-    """
+def main():
+    out = []
 
-    drift = signal - state.baseline
+    out.append(run("stable", scenarios.stable()))
+    out.append(run("gradual", scenarios.gradual()))
+    out.append(run("abrupt", scenarios.abrupt()))
 
-    # decay old debt
-    state.debt *= decay
+    for r in out:
+        print(r)
 
-    # accumulate new divergence
-    state.debt += abs(drift)
 
-    state.step += 1
-
-    return state
+if __name__ == "__main__":
+    main()
