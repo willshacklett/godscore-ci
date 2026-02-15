@@ -1,30 +1,37 @@
 import numpy as np
 
+
 class GVState:
-    def __init__(self, decay=0.95, threshold=10.0):
+    """
+    Minimal single-node GV runtime state.
+    Tracks debt accumulation over time.
+    """
+
+    def __init__(self, decay=0.01):
         self.debt = 0.0
         self.decay = decay
-        self.threshold = threshold
         self.history = []
 
-    def record(self):
+    def update(self, signal):
+        """
+        Update debt based on incoming instability signal.
+        signal: float (e.g., entropy / drift magnitude)
+        """
+        # Exponential decay on previous debt
+        self.debt *= (1 - self.decay)
+
+        # Accumulate new signal
+        self.debt += signal
+
+        # Store history
         self.history.append(self.debt)
+
+        return self.debt
+
 
 def gv_step(state: GVState, signal: float):
     """
-    Single GV update step.
-    signal: external instability input
+    One GV runtime step.
+    Returns updated debt value.
     """
-    # Apply decay to existing debt
-    state.debt *= state.decay
-
-    # Add new instability
-    state.debt += signal
-
-    # Record history
-    state.record()
-
-    # Check violation
-    violated = state.debt >= state.threshold
-
-    return violated
+    return state.update(signal)
