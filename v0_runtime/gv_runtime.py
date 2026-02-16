@@ -1,32 +1,49 @@
-import scenarios
-from gv_runtime import GVState, gv_step
+from dataclasses import dataclass
 
 
-def run(name, signal_series, decay=0.99):
-    state = GVState(step=0, baseline=signal_series[0], debt=0.0)
-    debt_curve = []
-
-    for s in signal_series:
-        state = gv_step(state, s, decay=decay)
-        debt_curve.append(state.debt)
-
-    return {
-        "scenario": name,
-        "final_debt": state.debt,
-        "max_debt": max(debt_curve),
-    }
+@dataclass
+class GVConfig:
+    threshold: float = 1.0
+    drift_rate: float = 0.05
 
 
-def main():
-    out = []
-
-    out.append(run("stable", scenarios.stable()))
-    out.append(run("gradual", scenarios.gradual()))
-    out.append(run("abrupt", scenarios.abrupt()))
-
-    for r in out:
-        print(r)
+@dataclass
+class GVState:
+    step: int = 0
+    baseline: float = 0.0
+    debt: float = 0.0
 
 
-if __name__ == "__main__":
-    main()
+class GVRuntime:
+    def __init__(self, cfg: GVConfig | None = None):
+        self.cfg = cfg or GVConfig()
+        self.state = GVState()
+
+    def step(self, signal: float) -> dict:
+        """
+        Advance one step of the GV runtime.
+        signal = entropy injection / drift input
+        """
+
+        # deterministic drift
+        drift = self.cfg.drift_rate
+
+        # update debt
+        self.state.debt += drift + signal
+
+        out = {
+            "step": self.state.step,
+            "drift": drift,
+            "signal": signal,
+            "debt": self.state.debt,
+            "breached": self.breached(),
+        }
+
+        self.state.step += 1
+        return out
+
+    def breached(self) -> bool:
+        return self.state.debt >= self.cfg.threshold
+
+    def reset(self, baseline: float = 0.0) -> None:
+        self.state = GVState(step=0, baseline=baseline, debt=0.0)
