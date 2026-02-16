@@ -1,45 +1,52 @@
 """
-V0 Runtime Runner
-Runs simple scenarios through GVState and prints results.
+v0_run.py
+GodScore CI – AutoScore v1 (GV Runtime Demo)
 
-This is a minimal, local test harness for the God Variable runtime.
+This runs simple scenarios and applies a threshold check
+without passing threshold into GVState constructor.
 """
 
+import json
+from datetime import datetime
+
+from scenarios import stable, drift, catastrophic
 from gv_runtime import GVState
-from scenarios import SCENARIOS
 
 
-def run(label: str, scenario: dict):
+def run(name, scenario_func, threshold=1.0):
     """
-    Run a single scenario through GVState.
+    Execute a scenario and return a structured result.
     """
-    state = GVState()
 
-    # Apply scenario inputs
-    for key, value in scenario.items():
-        setattr(state, key, value)
+    # Run the scenario to get raw score components
+    result = scenario_func()
 
-    score = state.compute_gv()
+    # Create GV state WITHOUT threshold argument
+    state = GVState(
+        loss=result["loss"],
+        constraint_violation=result["constraint_violation"],
+        recoverability=result["recoverability"],
+    )
+
+    godscore = state.score()
 
     return {
-        "label": label,
-        "gv_score": score,
-        "state": state.__dict__,
+        "scenario": name,
+        "godscore": godscore,
+        "passed_threshold": godscore >= threshold,
+        "timestamp": datetime.utcnow().isoformat()
     }
 
 
 def main():
-    results = []
+    threshold = 1.0
+    outputs = []
 
-    for label, scenario in SCENARIOS.items():
-        results.append(run(label, scenario))
+    outputs.append(run("stable", stable, threshold))
+    outputs.append(run("drift", drift, threshold))
+    outputs.append(run("catastrophic", catastrophic, threshold))
 
-    print("\n=== GV V0 Runtime Results ===\n")
-
-    for result in results:
-        print(f"Scenario: {result['label']}")
-        print(f"GV Score: {result['gv_score']:.4f}")
-        print("-" * 40)
+    print(json.dumps(outputs, indent=2))
 
 
 if __name__ == "__main__":
