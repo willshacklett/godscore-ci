@@ -1,59 +1,70 @@
-import pandas as pd
-from dataclasses import dataclass
+import os
+import csv
+from datetime import datetime
 
 
-@dataclass
-class GVState:
-    gv: float = 0.0
-    threshold: float = 1.0
+# ---------------------------
+# Simple GodScore Runtime v0
+# ---------------------------
 
-    @property
-    def godscore(self):
-        return round(1.0 - self.gv, 4)
-
-    @property
-    def status(self):
-        return "PASS" if self.gv <= self.threshold else "FAIL"
+def compute_godscore(gv: float) -> float:
+    """
+    GodScore = 1 - GV
+    Lower GV = better system recoverability
+    """
+    return round(1.0 - gv, 4)
 
 
-def run(name, scenario_fn, threshold=1.0):
-    gv_value = scenario_fn()
-
-    state = GVState(
-        gv=gv_value,
-        threshold=threshold
-    )
+def run_scenario(name: str, gv: float, threshold: float = 0.80):
+    score = compute_godscore(gv)
+    passed = score >= threshold
 
     return {
+        "timestamp": datetime.utcnow().isoformat(),
         "scenario": name,
-        "gv": state.gv,
-        "godscore": state.godscore,
-        "threshold": state.threshold,
-        "status": state.status
+        "gv": gv,
+        "godscore": score,
+        "threshold": threshold,
+        "passed": passed
     }
 
 
-# --- Example scenarios --- #
+def write_csv(results, output_path="v0_output.csv"):
+    file_exists = os.path.isfile(output_path)
 
-class scenarios:
+    with open(output_path, mode="a", newline="") as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=["timestamp", "scenario", "gv", "godscore", "threshold", "passed"]
+        )
 
-    @staticmethod
-    def stable():
-        return 0.2
+        if not file_exists:
+            writer.writeheader()
 
-    @staticmethod
-    def risky():
-        return 1.4
+        for row in results:
+            writer.writerow(row)
 
 
 def main():
-    out = []
+    print("Running GodScore v0 runtime...")
 
-    out.append(run("stable", scenarios.stable, threshold=1.0))
-    out.append(run("risky", scenarios.risky, threshold=1.0))
+    scenarios = [
+        run_scenario("stable", gv=0.10),
+        run_scenario("minor_regression", gv=0.25),
+        run_scenario("major_regression", gv=0.60),
+    ]
 
-    df = pd.DataFrame(out)
-    print(df)
+    write_csv(scenarios)
+
+    for s in scenarios:
+        print(
+            f"[{s['scenario']}] "
+            f"GV={s['gv']} "
+            f"GodScore={s['godscore']} "
+            f"Passed={s['passed']}"
+        )
+
+    print("Done.")
 
 
 if __name__ == "__main__":
