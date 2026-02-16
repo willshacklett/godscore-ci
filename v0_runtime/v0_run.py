@@ -1,43 +1,44 @@
+import json
+from datetime import datetime
+from scenarios import SCENARIOS
 from gv_runtime import GVState
-import scenarios
 
 
-def run(name, scenario_func):
+def run(label: str, scenario: dict, threshold: float = 1.0):
     """
-    Runs a scenario and returns structured result.
+    Runs a single GV scenario and returns structured result.
     """
 
-    state = GVState()  # <-- NO threshold argument
+    # IMPORTANT: Do NOT pass threshold into GVState constructor
+    state = GVState()
 
-    # Apply scenario
-    scenario_func(state)
+    # Apply scenario inputs
+    state.constraint_load = scenario.get("constraint_load", 0.0)
+    state.recoverability = scenario.get("recoverability", 1.0)
+    state.entropy = scenario.get("entropy", 0.0)
 
     # Compute score
-    score = state.score()
+    score = state.compute_gv()
 
     return {
-        "scenario": name,
-        "score": score,
+        "label": label,
+        "timestamp": datetime.utcnow().isoformat(),
+        "constraint_load": state.constraint_load,
         "recoverability": state.recoverability,
-        "constraint_pressure": state.constraint_pressure,
+        "entropy": state.entropy,
+        "gv_score": score,
+        "threshold": threshold,
+        "passed": score >= threshold,
     }
 
 
 def main():
     results = []
 
-    results.append(run("stable", scenarios.stable))
-    results.append(run("drift", scenarios.drift))
-    results.append(run("collapse", scenarios.collapse))
+    for label, scenario in SCENARIOS.items():
+        results.append(run(label, scenario, threshold=1.0))
 
-    print("\n=== GV v0 Runtime Results ===\n")
-
-    for r in results:
-        print(f"Scenario: {r['scenario']}")
-        print(f"  Score: {r['score']}")
-        print(f"  Recoverability: {r['recoverability']}")
-        print(f"  Constraint Pressure: {r['constraint_pressure']}")
-        print("")
+    print(json.dumps(results, indent=2))
 
 
 if __name__ == "__main__":
