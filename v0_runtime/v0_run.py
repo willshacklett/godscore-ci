@@ -1,27 +1,47 @@
-from gv_runtime import GVConfig, GVRuntime
+"""
+v0_run.py
+
+Minimal V0 runner for GV Runtime.
+Runs simple deterministic + stochastic scenarios
+and reports breach behavior.
+"""
+
+from gv_runtime import GVRuntime, GVConfig
+import scenarios
 
 
-def run(name: str, signals: list[float], threshold: float = 1.0):
-    cfg = GVConfig(threshold=threshold)
-    runtime = GVRuntime(cfg)
+def run(name, scenario_fn, threshold=1.0):
+    """
+    Execute a scenario against the GV runtime.
+    """
+    runtime = GVRuntime(GVConfig(threshold=threshold))
+    history = []
 
-    print(f"\n--- Scenario: {name} ---")
+    for signal in scenario_fn():
+        result = runtime.step(signal)
+        history.append(result)
 
-    for s in signals:
-        result = runtime.step(s)
-        print(result)
+        if result["breached"]:
+            break
 
-    print("Breached:", runtime.breached())
-    return runtime.breached()
+    return {
+        "name": name,
+        "steps": len(history),
+        "breached": runtime.breached(),
+        "final_debt": runtime.state.debt,
+    }
 
 
 def main():
+    results = []
 
-    stable_signals = [0.2, 0.1, 0.3, 0.2]
-    unstable_signals = [-0.4, -0.6, -0.5, -0.7]
+    results.append(run("stable", scenarios.stable, threshold=1.0))
+    results.append(run("drift", scenarios.drift, threshold=1.0))
+    results.append(run("spike", scenarios.spike, threshold=1.0))
 
-    run("stable", stable_signals, threshold=1.0)
-    run("unstable", unstable_signals, threshold=1.0)
+    print("\n=== GV Runtime V0 Results ===\n")
+    for r in results:
+        print(r)
 
 
 if __name__ == "__main__":
