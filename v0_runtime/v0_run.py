@@ -1,83 +1,59 @@
-"""
-v0_run.py
-Minimal GV runtime demo (no external dependencies)
-
-Run with:
-    python v0_run.py
-"""
-
+import pandas as pd
 from dataclasses import dataclass
-from typing import List
 
-
-# ---------------------------
-# GV Core
-# ---------------------------
 
 @dataclass
 class GVState:
-    penalties: List[float]
+    gv: float = 0.0
+    threshold: float = 1.0
 
-    def gv(self) -> float:
-        """
-        Lower GV is better.
-        GV is sum of penalties.
-        """
-        return sum(self.penalties)
+    @property
+    def godscore(self):
+        return round(1.0 - self.gv, 4)
 
-    def godscore(self) -> float:
-        """
-        GodScore = 1 - GV (clamped between 0 and 1)
-        """
-        score = 1.0 - self.gv()
-        return max(0.0, min(1.0, score))
+    @property
+    def status(self):
+        return "PASS" if self.gv <= self.threshold else "FAIL"
 
 
-# ---------------------------
-# Scenarios
-# ---------------------------
+def run(name, scenario_fn, threshold=1.0):
+    gv_value = scenario_fn()
 
-def stable_scenario() -> GVState:
-    # Small penalties → stable system
-    return GVState(penalties=[0.05, 0.03, 0.02])
-
-
-def risky_scenario() -> GVState:
-    # Larger penalties → degrading system
-    return GVState(penalties=[0.30, 0.25, 0.20])
-
-
-# ---------------------------
-# Runner
-# ---------------------------
-
-def run(name: str, state: GVState, threshold: float = 0.8):
-    gv = state.gv()
-    score = state.godscore()
-
-    print(f"\nScenario: {name}")
-    print(f"GV: {gv:.3f}")
-    print(f"GodScore: {score:.3f}")
-
-    if score < threshold:
-        print("⚠️  Below threshold")
-    else:
-        print("✅ Above threshold")
+    state = GVState(
+        gv=gv_value,
+        threshold=threshold
+    )
 
     return {
-        "name": name,
-        "gv": gv,
-        "godscore": score
+        "scenario": name,
+        "gv": state.gv,
+        "godscore": state.godscore,
+        "threshold": state.threshold,
+        "status": state.status
     }
 
 
-def main():
-    results = []
-    results.append(run("stable", stable_scenario()))
-    results.append(run("risky", risky_scenario()))
+# --- Example scenarios --- #
 
-    print("\nDone.")
-    return results
+class scenarios:
+
+    @staticmethod
+    def stable():
+        return 0.2
+
+    @staticmethod
+    def risky():
+        return 1.4
+
+
+def main():
+    out = []
+
+    out.append(run("stable", scenarios.stable, threshold=1.0))
+    out.append(run("risky", scenarios.risky, threshold=1.0))
+
+    df = pd.DataFrame(out)
+    print(df)
 
 
 if __name__ == "__main__":
