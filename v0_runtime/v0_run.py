@@ -1,34 +1,39 @@
 """
-v0_run.py
-
-Minimal V0 runner for GV Runtime.
-Runs simple deterministic + stochastic scenarios
-and reports breach behavior.
+GV Runtime V0 Runner
+Single-node deterministic scenario runner
 """
 
-from gv_runtime import GVRuntime, GVConfig
+from gv_runtime import GVState, GVRuntime
 import scenarios
 
 
-def run(name, scenario_fn, threshold=1.0):
-    """
-    Execute a scenario against the GV runtime.
-    """
-    runtime = GVRuntime(GVConfig(threshold=threshold))
-    history = []
+def run(name: str, scenario_fn, threshold: float = 1.0):
+    print(f"\n--- Running scenario: {name} ---")
 
-    for signal in scenario_fn():
-        result = runtime.step(signal)
-        history.append(result)
+    # Initial state
+    state = GVState(step=0, baseline=0.0, debt=0.0)
 
-        if result["breached"]:
+    # Runtime wrapper holds threshold
+    runtime = GVRuntime(state=state, threshold=threshold)
+
+    # Execute scenario steps
+    for delta in scenario_fn():
+        runtime.step(delta)
+
+        print(
+            f"step={runtime.state.step} "
+            f"debt={runtime.state.debt:.4f}"
+        )
+
+        if runtime.breached():
+            print("⚠️  Threshold breached.")
             break
 
     return {
-        "name": name,
-        "steps": len(history),
-        "breached": runtime.breached(),
+        "scenario": name,
+        "final_step": runtime.state.step,
         "final_debt": runtime.state.debt,
+        "breached": runtime.breached(),
     }
 
 
@@ -37,9 +42,9 @@ def main():
 
     results.append(run("stable", scenarios.stable, threshold=1.0))
     results.append(run("drift", scenarios.drift, threshold=1.0))
-    results.append(run("spike", scenarios.spike, threshold=1.0))
+    results.append(run("shock", scenarios.shock, threshold=1.0))
 
-    print("\n=== GV Runtime V0 Results ===\n")
+    print("\n=== Summary ===")
     for r in results:
         print(r)
 
