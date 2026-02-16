@@ -1,122 +1,83 @@
-#!/usr/bin/env python3
 """
-Minimal v0 runtime for GodScore CI.
+v0_run.py
+Minimal GV runtime demo (no external dependencies)
 
-- Lower GV is better
-- GodScore = clamp(1 - GV, 0..1)
-- Threshold is applied AFTER computation (not in GVState init)
+Run with:
+    python v0_run.py
 """
 
-from dataclasses import dataclass, field
-from typing import List, Dict, Any, Iterable
-import json
+from dataclasses import dataclass
+from typing import List
 
 
-def clamp(x: float, lo: float, hi: float) -> float:
-    return max(lo, min(hi, x))
-
-
-# -------------------------
-# Core Data Structures
-# -------------------------
-
-@dataclass
-class GVEvent:
-    label: str
-    penalty: float = 0.0
-    notes: str = ""
-
+# ---------------------------
+# GV Core
+# ---------------------------
 
 @dataclass
 class GVState:
-    gv: float = 0.0
-    steps: int = 0
-    history: List[Dict[str, Any]] = field(default_factory=list)
+    penalties: List[float]
 
-    def apply(self, event: GVEvent) -> None:
-        self.steps += 1
-        self.gv += float(event.penalty)
-        self.history.append({
-            "step": self.steps,
-            "label": event.label,
-            "penalty": event.penalty,
-            "gv_after": self.gv
-        })
+    def gv(self) -> float:
+        """
+        Lower GV is better.
+        GV is sum of penalties.
+        """
+        return sum(self.penalties)
 
-
-def godscore_from_gv(gv: float) -> float:
-    return clamp(1.0 - gv, 0.0, 1.0)
+    def godscore(self) -> float:
+        """
+        GodScore = 1 - GV (clamped between 0 and 1)
+        """
+        score = 1.0 - self.gv()
+        return max(0.0, min(1.0, score))
 
 
-# -------------------------
+# ---------------------------
 # Scenarios
-# -------------------------
+# ---------------------------
 
-def stable(steps: int = 10) -> List[GVEvent]:
-    return [GVEvent("stable", 0.0) for _ in range(steps)]
-
-
-def degrade(steps: int = 10, per_step: float = 0.06) -> List[GVEvent]:
-    return [GVEvent("degrade", per_step) for _ in range(steps)]
+def stable_scenario() -> GVState:
+    # Small penalties → stable system
+    return GVState(penalties=[0.05, 0.03, 0.02])
 
 
-def recover(steps: int = 10, per_step: float = -0.05) -> List[GVEvent]:
-    return [GVEvent("recover", per_step) for _ in range(steps)]
+def risky_scenario() -> GVState:
+    # Larger penalties → degrading system
+    return GVState(penalties=[0.30, 0.25, 0.20])
 
 
-def oscillate(cycles: int = 5) -> List[GVEvent]:
-    events = []
-    for i in range(cycles):
-        events.append(GVEvent(f"up_{i+1}", 0.08))
-        events.append(GVEvent(f"down_{i+1}", -0.06))
-    return events
-
-
-# -------------------------
+# ---------------------------
 # Runner
-# -------------------------
+# ---------------------------
 
-def run(name: str, events: Iterable[GVEvent], threshold: float = 1.0) -> Dict[str, Any]:
-    state = GVState()
+def run(name: str, state: GVState, threshold: float = 0.8):
+    gv = state.gv()
+    score = state.godscore()
 
-    for e in events:
-        state.apply(e)
+    print(f"\nScenario: {name}")
+    print(f"GV: {gv:.3f}")
+    print(f"GodScore: {score:.3f}")
 
-    gv = state.gv
-    godscore = godscore_from_gv(gv)
+    if score < threshold:
+        print("⚠️  Below threshold")
+    else:
+        print("✅ Above threshold")
 
     return {
-        "scenario": name,
-        "threshold": threshold,
-        "passed": gv <= threshold,
+        "name": name,
         "gv": gv,
-        "godscore": godscore,
-        "steps": state.steps,
-        "history": state.history
+        "godscore": score
     }
 
 
 def main():
-    threshold = 1.0
-
-    scenarios = {
-        "stable": stable(),
-        "degrade": degrade(),
-        "recover": recover(),
-        "oscillate": oscillate()
-    }
-
     results = []
-    for name, events in scenarios.items():
-        results.append(run(name, events, threshold))
+    results.append(run("stable", stable_scenario()))
+    results.append(run("risky", risky_scenario()))
 
-    output = {
-        "version": "v0",
-        "threshold": threshold,
-        "results": results
-    }
-
-    print(json.dumps(output, indent=2))
+    print("\nDone.")
+    return results
 
 
 if __name__ == "__main__":
