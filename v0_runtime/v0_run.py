@@ -1,39 +1,45 @@
-import json
-from datetime import datetime
+"""
+V0 Runtime Runner
+Runs simple scenarios through GVState and prints results.
+
+This is a minimal, local test harness for the God Variable runtime.
+"""
 
 from gv_runtime import GVState
-import scenarios
+from scenarios import SCENARIOS
 
 
-def run(label, scenario_fn):
+def run(label: str, scenario: dict):
     """
-    Run a single scenario and return result dictionary.
+    Run a single scenario through GVState.
     """
-    state = GVState()  # <-- NO threshold passed here
+    state = GVState()
 
-    # Apply scenario mutations
-    scenario_fn(state)
+    # Apply scenario inputs
+    for key, value in scenario.items():
+        setattr(state, key, value)
 
-    result = {
+    score = state.compute_gv()
+
+    return {
         "label": label,
-        "timestamp": datetime.utcnow().isoformat(),
-        "dgv": state.dgv,
-        "recoverability": state.recoverability,
-        "stability": state.stability,
-        "score": state.score()
+        "gv_score": score,
+        "state": state.__dict__,
     }
-
-    return result
 
 
 def main():
     results = []
 
-    results.append(run("stable", scenarios.stable))
-    results.append(run("drift", scenarios.drift))
-    results.append(run("collapse", scenarios.collapse))
+    for label, scenario in SCENARIOS.items():
+        results.append(run(label, scenario))
 
-    print(json.dumps(results, indent=2))
+    print("\n=== GV V0 Runtime Results ===\n")
+
+    for result in results:
+        print(f"Scenario: {result['label']}")
+        print(f"GV Score: {result['gv_score']:.4f}")
+        print("-" * 40)
 
 
 if __name__ == "__main__":
