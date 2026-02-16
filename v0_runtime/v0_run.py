@@ -1,52 +1,84 @@
 """
 v0_run.py
-GodScore CI – AutoScore v1 (GV Runtime Demo)
 
-This runs simple scenarios and applies a threshold check
-without passing threshold into GVState constructor.
+Simple runtime demo for GV (God Variable).
+Runs a few synthetic scenarios and prints resulting state.
 """
 
-import json
-from datetime import datetime
-
-from scenarios import stable, drift, catastrophic
 from gv_runtime import GVState
 
 
-def run(name, scenario_func, threshold=1.0):
+def run(name: str, scenario_fn):
     """
-    Execute a scenario and return a structured result.
+    Run a single scenario and return summary.
     """
+    state = GVState()  # <-- no threshold passed here
 
-    # Run the scenario to get raw score components
-    result = scenario_func()
-
-    # Create GV state WITHOUT threshold argument
-    state = GVState(
-        loss=result["loss"],
-        constraint_violation=result["constraint_violation"],
-        recoverability=result["recoverability"],
-    )
-
-    godscore = state.score()
+    scenario_fn(state)
 
     return {
         "scenario": name,
-        "godscore": godscore,
-        "passed_threshold": godscore >= threshold,
-        "timestamp": datetime.utcnow().isoformat()
+        "health": round(state.health, 3),
+        "constraint_debt": round(state.constraint_debt, 3),
+        "collapsed": state.collapsed,
     }
 
 
+# -------------------------
+# SCENARIOS
+# -------------------------
+
+def stable(state: GVState):
+    """
+    Healthy system — low constraint pressure.
+    """
+    for _ in range(10):
+        state.update(
+            pressure=0.2,
+            recoverability=0.9,
+            threshold=1.0
+        )
+
+
+def degrading(state: GVState):
+    """
+    System slowly degrading.
+    """
+    for _ in range(10):
+        state.update(
+            pressure=0.6,
+            recoverability=0.4,
+            threshold=1.0
+        )
+
+
+def collapse(state: GVState):
+    """
+    High pressure system that collapses.
+    """
+    for _ in range(10):
+        state.update(
+            pressure=1.2,
+            recoverability=0.1,
+            threshold=1.0
+        )
+
+
+# -------------------------
+# MAIN
+# -------------------------
+
 def main():
-    threshold = 1.0
-    outputs = []
+    results = []
 
-    outputs.append(run("stable", stable, threshold))
-    outputs.append(run("drift", drift, threshold))
-    outputs.append(run("catastrophic", catastrophic, threshold))
+    results.append(run("stable", stable))
+    results.append(run("degrading", degrading))
+    results.append(run("collapse", collapse))
 
-    print(json.dumps(outputs, indent=2))
+    print("\nGV Runtime Demo Results\n" + "-" * 30)
+
+    for r in results:
+        print(r)
 
 
 if __name__ == "__main__":
