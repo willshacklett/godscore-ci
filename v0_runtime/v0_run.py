@@ -1,52 +1,59 @@
-
 """
-GV Runtime V0 runner (single node demo)
+GV Runtime V0 runner
+Single-node deterministic drift + optional abrupt breach scenario
 """
 
 from gv_runtime import GVState, gv_step
 import scenarios
 
 
-def run(name, scenario_fn, threshold=1.0):
-    print(f"\n--- Scenario: {name} ---")
-
-    # GVState does NOT take threshold
-    state = GVState(step=0, baseline=1.0, debt=0.0)
+def run(name, scenario_fn, threshold=1.0, steps=25):
+    """
+    Execute a scenario for N steps and return summary output.
+    """
+    state = GVState(step=0, baseline=0.0, debt=0.0)
 
     history = []
 
-    for value in scenario_fn():
-        state = gv_step(state, value)
-        history.append(state.debt)
+    for _ in range(steps):
+        delta = scenario_fn(state)
+        gv_step(state, delta)
 
-        print(f"step={state.step} debt={state.debt:.4f}")
+        breached = state.debt >= threshold
 
-        if state.debt >= threshold:
-            print("⚠️  Threshold breached")
+        history.append({
+            "step": state.step,
+            "delta": delta,
+            "debt": state.debt,
+            "breached": breached,
+        })
+
+        if breached:
             break
 
     return {
         "name": name,
+        "final_step": state.step,
         "final_debt": state.debt,
-        "steps": state.step,
         "breached": state.debt >= threshold,
         "history": history,
     }
 
 
 def main():
-    results = []
+    outputs = []
 
-    results.append(run("stable", scenarios.stable, threshold=1.0))
-    results.append(run("volatile", scenarios.volatile, threshold=1.0))
-    results.append(run("recovering", scenarios.recovering, threshold=1.0))
+    outputs.append(run("stable", scenarios.stable))
+    outputs.append(run("linear_drift", scenarios.linear_drift))
+    outputs.append(run("abrupt_spike", scenarios.abrupt_spike))
 
-    print("\n=== Summary ===")
-    for r in results:
-        print(
-            f"{r['name']}: debt={r['final_debt']:.4f} "
-            f"steps={r['steps']} breached={r['breached']}"
-        )
+    for result in outputs:
+        print("\n==============================")
+        print(f"Scenario: {result['name']}")
+        print(f"Final Step: {result['final_step']}")
+        print(f"Final Debt: {result['final_debt']:.4f}")
+        print(f"Breach: {result['breached']}")
+        print("==============================")
 
 
 if __name__ == "__main__":
