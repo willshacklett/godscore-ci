@@ -2,26 +2,22 @@ name: GodScore CI - AutoScore Demo
 
 on:
   push:
-    branches: [ main ]
-  workflow_dispatch: {}
+    branches:
+      - main
 
 jobs:
-  godscore:
+  run-godscore:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Run GodScore CI (AutoScore v1 + GV)
-        uses: willshacklett/godscore-ci@main
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          threshold: "0.80"
-          mode: "free"
-          enforce: "false"
+          python-version: "3.11"
 
-      - name: Upload GodScore JSON artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: godscore-json
-          path: godscore.json
+      - name: Run v0 runtime
+        run: |
+          python v0_runtime/v0_run.py
