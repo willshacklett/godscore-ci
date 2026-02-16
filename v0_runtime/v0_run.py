@@ -1,59 +1,43 @@
-"""
-GV Runtime V0 runner
-Single-node deterministic drift + optional abrupt breach scenario
-"""
-
-from gv_runtime import GVState, gv_step
+from gv_runtime import GVState
 import scenarios
 
 
-def run(name, scenario_fn, threshold=1.0, steps=25):
+def run(name, scenario_func):
     """
-    Execute a scenario for N steps and return summary output.
+    Runs a scenario and returns structured result.
     """
-    state = GVState(step=0, baseline=0.0, debt=0.0)
 
-    history = []
+    state = GVState()  # <-- NO threshold argument
 
-    for _ in range(steps):
-        delta = scenario_fn(state)
-        gv_step(state, delta)
+    # Apply scenario
+    scenario_func(state)
 
-        breached = state.debt >= threshold
-
-        history.append({
-            "step": state.step,
-            "delta": delta,
-            "debt": state.debt,
-            "breached": breached,
-        })
-
-        if breached:
-            break
+    # Compute score
+    score = state.score()
 
     return {
-        "name": name,
-        "final_step": state.step,
-        "final_debt": state.debt,
-        "breached": state.debt >= threshold,
-        "history": history,
+        "scenario": name,
+        "score": score,
+        "recoverability": state.recoverability,
+        "constraint_pressure": state.constraint_pressure,
     }
 
 
 def main():
-    outputs = []
+    results = []
 
-    outputs.append(run("stable", scenarios.stable))
-    outputs.append(run("linear_drift", scenarios.linear_drift))
-    outputs.append(run("abrupt_spike", scenarios.abrupt_spike))
+    results.append(run("stable", scenarios.stable))
+    results.append(run("drift", scenarios.drift))
+    results.append(run("collapse", scenarios.collapse))
 
-    for result in outputs:
-        print("\n==============================")
-        print(f"Scenario: {result['name']}")
-        print(f"Final Step: {result['final_step']}")
-        print(f"Final Debt: {result['final_debt']:.4f}")
-        print(f"Breach: {result['breached']}")
-        print("==============================")
+    print("\n=== GV v0 Runtime Results ===\n")
+
+    for r in results:
+        print(f"Scenario: {r['scenario']}")
+        print(f"  Score: {r['score']}")
+        print(f"  Recoverability: {r['recoverability']}")
+        print(f"  Constraint Pressure: {r['constraint_pressure']}")
+        print("")
 
 
 if __name__ == "__main__":
