@@ -1,31 +1,27 @@
-import scenarios
-from gv_runtime import GVState, gv_step
+from gv_runtime import GVConfig, GVRuntime
 
 
-def run(name, signal_series, decay=0.99):
-    state = GVState(step=0, baseline=signal_series[0], debt=0.0)
-    debt_curve = []
+def run(name: str, signals: list[float], threshold: float = 1.0):
+    cfg = GVConfig(threshold=threshold)
+    runtime = GVRuntime(cfg)
 
-    for s in signal_series:
-        state = gv_step(state, s, decay=decay)
-        debt_curve.append(state.debt)
+    print(f"\n--- Scenario: {name} ---")
 
-    return {
-        "scenario": name,
-        "final_debt": state.debt,
-        "max_debt": max(debt_curve),
-    }
+    for s in signals:
+        result = runtime.step(s)
+        print(result)
+
+    print("Breached:", runtime.breached())
+    return runtime.breached()
 
 
 def main():
-    out = []
 
-    out.append(run("stable", scenarios.stable()))
-    out.append(run("gradual", scenarios.gradual()))
-    out.append(run("abrupt", scenarios.abrupt()))
+    stable_signals = [0.2, 0.1, 0.3, 0.2]
+    unstable_signals = [-0.4, -0.6, -0.5, -0.7]
 
-    for r in out:
-        print(r)
+    run("stable", stable_signals, threshold=1.0)
+    run("unstable", unstable_signals, threshold=1.0)
 
 
 if __name__ == "__main__":
