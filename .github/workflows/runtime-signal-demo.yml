@@ -2,24 +2,11 @@ name: Runtime Signal Demo
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - 'scripts/runtime_signal.py'
-      - 'examples/runtime_signal_input.csv'
-      - '.github/workflows/runtime-signal-demo.yml'
-      - 'requirements-runtime.txt'
+  pull_request:
 
 jobs:
-  runtime-signal:
+  runtime-demo:
     runs-on: ubuntu-latest
-    outputs:
-      warned: ${{ steps.signal.outputs.warned }}
-      first_warning_t: ${{ steps.signal.outputs.first_warning_t }}
-      max_gv: ${{ steps.signal.outputs.max_gv }}
-      max_persistence: ${{ steps.signal.outputs.max_persistence }}
-      max_lag: ${{ steps.signal.outputs.max_lag }}
-      godscore_runtime: ${{ steps.signal.outputs.godscore_runtime }}
-      effective_mode: ${{ steps.signal.outputs.effective_mode }}
 
     steps:
       - name: Checkout
@@ -30,39 +17,26 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install runtime deps
+      - name: Install deps
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-runtime.txt
 
       - name: Run runtime signal
-        id: signal
         run: |
           python scripts/runtime_signal.py examples/runtime_signal_input.csv
 
-      - name: Print outputs
-        run: |
-          echo "warned=${{ steps.signal.outputs.warned }}"
-          echo "first_warning_t=${{ steps.signal.outputs.first_warning_t }}"
-          echo "max_gv=${{ steps.signal.outputs.max_gv }}"
-          echo "max_persistence=${{ steps.signal.outputs.max_persistence }}"
-          echo "max_lag=${{ steps.signal.outputs.max_lag }}"
-          echo "godscore_runtime=${{ steps.signal.outputs.godscore_runtime }}"
-          echo "effective_mode=${{ steps.signal.outputs.effective_mode }}"
-
       - name: Runtime badge summary
         run: |
-          python - <<'PY2'
-          import json
+          python - <<'PY'
+          import json, os
           from pathlib import Path
-          import os
 
-          summary_path = Path("outputs/runtime_signal/runtime_signal_input_summary.json")
-          data = json.loads(summary_path.read_text())
+          data = json.loads(Path("outputs/runtime_signal/runtime_signal_input_summary.json").read_text())
 
           score = int(data.get("godscore_runtime", 100))
-          warned = bool(data.get("warned", False))
-          first_warning_t = data.get("first_warning_t")
+          warned = data.get("warned")
+          t = data.get("first_warning_t")
 
           if score >= 80:
               badge = "SAFE"
@@ -75,25 +49,16 @@ jobs:
               "# GodScore Runtime Summary",
               "",
               f"- Badge: **{badge}**",
-              f"- Runtime Score: **{score}**",
+              f"- Score: **{score}**",
               f"- Warned: **{warned}**",
-              f"- First Warning t: **{first_warning_t}**",
+              f"- First Warning t: **{t}**",
           ]
 
-          summary_file = os.environ.get("GITHUB_STEP_SUMMARY")
-          if summary_file:
-              with open(summary_file, "a", encoding="utf-8") as f:
-                  f.write("\n".join(lines) + "\n")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
+              f.write("\n".join(lines) + "\n")
 
           print("\n".join(lines))
-          PY2
-
-      - name: Upload outputs
-        uses: actions/upload-artifact@v4
-        with:
-          name: runtime-signal-outputs
-          path: outputs/runtime_signal/*
-
+          PY
 
       - name: PR Runtime Comment
         if: github.event_name == 'pull_request'
@@ -114,8 +79,7 @@ jobs:
             if (score < 50) badge = "CRITICAL";
             else if (score < 80) badge = "AT RISK";
 
-            const body = `
-## 🔍 GodScore Runtime Signal
+            const body = `## 🔍 GodScore Runtime Signal
 
 **Status:** ${badge}  
 **Score:** ${score}  
@@ -123,11 +87,11 @@ jobs:
 **First Warning t:** ${t}
 
 ${score < 50 ? "❌ High irreversibility risk detected" : ""}
-${score < 80 && score >= 50 ? "⚠ Early warning signal detected" : ""}
+${score >= 50 && score < 80 ? "⚠ Early warning signal detected" : ""}
 ${score >= 80 ? "✅ System trajectory stable" : ""}
 `;
 
-            github.rest.issues.createComment({
+            await github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
