@@ -2,6 +2,15 @@ name: "GodScore CI"
 description: "Constraint-based governance score with memory. AutoScore v1 + GV spine. Optional enforcement."
 
 inputs:
+  runtime_mode:
+    description: "Enable runtime irreversibility signal"
+    required: false
+    default: "false"
+  runtime_threshold:
+    description: "Minimum runtime godscore (0-100)"
+    required: false
+    default: "50"
+
   score:
     description: "Optional. 0..1 or 0..100. Omit or set to 'auto' to compute AutoScore v1 -> GV -> GodScore."
     required: false
@@ -39,14 +48,98 @@ runs:
   using: "composite"
   steps:
     - name: "Set up Python"
-      uses: actions/setup-python@v5
+      uses: actions/setup-python << 'PY'
+
+# === RUNTIME SIGNAL INTEGRATION ===
+import json
+from pathlib import Path
+
+runtime_file = Path("outputs/runtime_signal/runtime_signal_input_summary.json")
+
+runtime_score = None
+if runtime_file.exists():
+    data = json.loads(runtime_file.read_text())
+    runtime_score = data.get("godscore_runtime")
+
+# fallback if missing
+if runtime_score is None:
+    runtime_score = 100
+
+# blend with base score (simple min for now)
+final_score = min(score, runtime_score)
+
+print(f"Base score: {score}")
+print(f"Runtime score: {runtime_score}")
+print(f"Final score: {final_score}")
+
+score = final_score
+
+# === END RUNTIME SIGNAL ===
+
+PY@v5
       with:
-        python-version: "3.11"
+        python << 'PY'
+
+# === RUNTIME SIGNAL INTEGRATION ===
+import json
+from pathlib import Path
+
+runtime_file = Path("outputs/runtime_signal/runtime_signal_input_summary.json")
+
+runtime_score = None
+if runtime_file.exists():
+    data = json.loads(runtime_file.read_text())
+    runtime_score = data.get("godscore_runtime")
+
+# fallback if missing
+if runtime_score is None:
+    runtime_score = 100
+
+# blend with base score (simple min for now)
+final_score = min(score, runtime_score)
+
+print(f"Base score: {score}")
+print(f"Runtime score: {runtime_score}")
+print(f"Final score: {final_score}")
+
+score = final_score
+
+# === END RUNTIME SIGNAL ===
+
+PY-version: "3.11"
 
     - name: "Install dependencies"
       shell: bash
       run: |
-        python -m pip install --upgrade pip
+        python << 'PY'
+
+# === RUNTIME SIGNAL INTEGRATION ===
+import json
+from pathlib import Path
+
+runtime_file = Path("outputs/runtime_signal/runtime_signal_input_summary.json")
+
+runtime_score = None
+if runtime_file.exists():
+    data = json.loads(runtime_file.read_text())
+    runtime_score = data.get("godscore_runtime")
+
+# fallback if missing
+if runtime_score is None:
+    runtime_score = 100
+
+# blend with base score (simple min for now)
+final_score = min(score, runtime_score)
+
+print(f"Base score: {score}")
+print(f"Runtime score: {runtime_score}")
+print(f"Final score: {final_score}")
+
+score = final_score
+
+# === END RUNTIME SIGNAL ===
+
+PY -m pip install --upgrade pip
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
         if [ -f pyproject.toml ]; then pip install .; fi
 
@@ -54,4 +147,32 @@ runs:
       id: godscore_run
       shell: bash
       run: |
-        python -m godscore_ci.action_main
+        python << 'PY'
+
+# === RUNTIME SIGNAL INTEGRATION ===
+import json
+from pathlib import Path
+
+runtime_file = Path("outputs/runtime_signal/runtime_signal_input_summary.json")
+
+runtime_score = None
+if runtime_file.exists():
+    data = json.loads(runtime_file.read_text())
+    runtime_score = data.get("godscore_runtime")
+
+# fallback if missing
+if runtime_score is None:
+    runtime_score = 100
+
+# blend with base score (simple min for now)
+final_score = min(score, runtime_score)
+
+print(f"Base score: {score}")
+print(f"Runtime score: {runtime_score}")
+print(f"Final score: {final_score}")
+
+score = final_score
+
+# === END RUNTIME SIGNAL ===
+
+PY -m godscore_ci.action_main
