@@ -19,78 +19,33 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-runtime.txt
 
-      - name: Run continuous runtime monitor
+      - name: Run monitor
+        run: python scripts/runtime_monitor.py
+
+      - name: Drift check
+        run: python scripts/runtime_drift_check.py
+
+      - name: Adaptive threshold
+        run: python scripts/runtime_adaptive_threshold.py
+
+      - name: Enforcement
         run: |
-          python scripts/runtime_monitor.py
+          python - << 'PY'
+import json
+from pathlib import Path
 
-      - name: Run drift check
-        run: |
-          python scripts/runtime_drift_check.py
+data = json.loads(Path("outputs/runtime_signal/runtime_adaptive_summary.json").read_text())
 
-      - name: Upload runtime artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: runtime-history
-          path: |
-            outputs/runtime_signal/runtime_history.jsonl
-            outputs/runtime_signal/runtime_drift_summary.json
-            outputs/runtime_signal/runtime_signal_input_summary.json
-            outputs/runtime_signal/runtime_signal_input_enriched.csv
+score = data["latest_score"]
+threshold = data["adaptive_threshold"]
+fail = data["fail"]
 
-      - name: Runtime drift summary
-        run: |
-          python - <<'PY'
-          import json, os
-          from pathlib import Path
+print(f"score={score}")
+print(f"threshold={threshold}")
+print(f"fail={fail}")
 
-          data = json.loads(Path("outputs/runtime_signal/runtime_drift_summary.json").read_text())
-
-          drift = data.get("drift_detected", False)
-          latest_score = data.get("latest_score")
-          slope = data.get("score_slope")
-          reason = data.get("reason")
-
-          badge = "STABLE"
-          if latest_score is not None and latest_score < 50:
-              badge = "CRITICAL"
-          elif drift:
-              badge = "DRIFTING"
-
-          lines = [
-              "# Runtime Drift Summary",
-              "",
-              f"- Badge: **{badge}**",
-              f"- Latest Score: **{latest_score}**",
-              f"- Drift Detected: **{drift}**",
-              f"- Score Slope: **{slope}**",
-              f"- Reason: **{reason}**",
-          ]
-
-          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as f:
-              f.write("\\n".join(lines) + "\\n")
-
-          print("\\n".join(lines))
-          PY
-
-      - name: Runtime enforcement
-        run: |
-          python - <<'PY'
-          import json
-          from pathlib import Path
-
-          latest = json.loads(Path("outputs/runtime_signal/runtime_drift_summary.json").read_text())
-
-          latest_score = latest.get("latest_score", 100)
-          drift_detected = latest.get("drift_detected", False)
-
-          print(f"latest_score={latest_score}")
-          print(f"drift_detected={drift_detected}")
-
-          if latest_score < 50:
-              raise SystemExit(f"❌ Runtime FAIL: score {latest_score} < 50")
-
-          if drift_detected:
-              print("⚠ Drift detected (not yet hard fail)")
-          else:
-              print("✅ Runtime stable")
-          PY
+if fail:
+    raise SystemExit(f"❌ FAIL: {score} < {threshold}")
+else:
+    print("✅ PASS")
+PY
