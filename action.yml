@@ -86,17 +86,20 @@ runtime_enforce = os.environ.get("INPUT_RUNTIME_ENFORCE", "false").lower() == "t
 
 print(f"[runtime] threshold={runtime_threshold}")
 print(f"[runtime] enforce={runtime_enforce}")
+print(f"[runtime] score={runtime_score}")
 
 if runtime_enforce:
-    print(f"[runtime] checking score {runtime_score} < {runtime_threshold}")
     if runtime_score < runtime_threshold:
         raise SystemExit(
-            f"❌ Runtime enforcement FAILED: {runtime_score} < {runtime_threshold}"
+            f"❌ Runtime FAIL: {runtime_score} < {runtime_threshold}"
         )
     else:
-        print("✅ Runtime enforcement PASSED")
+        print("✅ Runtime PASS")
 
 # === END RUNTIME ENFORCEMENT ===
+
+
+
 
 
 
@@ -138,52 +141,18 @@ runtime_enforce = os.environ.get("INPUT_RUNTIME_ENFORCE", "false").lower() == "t
 
 print(f"[runtime] threshold={runtime_threshold}")
 print(f"[runtime] enforce={runtime_enforce}")
+print(f"[runtime] score={runtime_score}")
 
 if runtime_enforce:
-    print(f"[runtime] checking score {runtime_score} < {runtime_threshold}")
     if runtime_score < runtime_threshold:
         raise SystemExit(
-            f"❌ Runtime enforcement FAILED: {runtime_score} < {runtime_threshold}"
+            f"❌ Runtime FAIL: {runtime_score} < {runtime_threshold}"
         )
     else:
-        print("✅ Runtime enforcement PASSED")
+        print("✅ Runtime PASS")
 
 # === END RUNTIME ENFORCEMENT ===
 
-
-
-# === END RUNTIME SIGNAL ===
-
-PY-version: "3.11"
-
-    - name: "Install dependencies"
-      shell: bash
-      run: |
-        python << 'PY'
-
-# === RUNTIME SIGNAL INTEGRATION ===
-import json
-from pathlib import Path
-
-runtime_file = Path("outputs/runtime_signal/runtime_signal_input_summary.json")
-
-runtime_score = None
-if runtime_file.exists():
-    data = json.loads(runtime_file.read_text())
-    runtime_score = data.get("godscore_runtime")
-
-# fallback if missing
-if runtime_score is None:
-    runtime_score = 100
-
-# blend with base score (simple min for now)
-final_score = min(score, runtime_score)
-
-print(f"Base score: {score}")
-print(f"Runtime score: {runtime_score}")
-print(f"Final score: {final_score}")
-
-score = final_score
 
 # === RUNTIME ENFORCEMENT ===
 import os
@@ -203,68 +172,3 @@ if runtime_enforce:
     else:
         print("✅ Runtime enforcement PASSED")
 
-# === END RUNTIME ENFORCEMENT ===
-
-
-
-# === END RUNTIME SIGNAL ===
-
-PY -m pip install --upgrade pip
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-        if [ -f pyproject.toml ]; then pip install .; fi
-
-    - name: "Run GodScore CI"
-      id: godscore_run
-      shell: bash
-      run: |
-        python << 'PY'
-
-# === RUNTIME SIGNAL INTEGRATION ===
-import json
-from pathlib import Path
-
-runtime_file = Path("outputs/runtime_signal/runtime_signal_input_summary.json")
-
-runtime_score = None
-if runtime_file.exists():
-    data = json.loads(runtime_file.read_text())
-    runtime_score = data.get("godscore_runtime")
-
-# fallback if missing
-if runtime_score is None:
-    runtime_score = 100
-
-# blend with base score (simple min for now)
-final_score = min(score, runtime_score)
-
-print(f"Base score: {score}")
-print(f"Runtime score: {runtime_score}")
-print(f"Final score: {final_score}")
-
-score = final_score
-
-# === RUNTIME ENFORCEMENT ===
-import os
-
-runtime_threshold = int(os.environ.get("INPUT_RUNTIME_THRESHOLD", "50"))
-runtime_enforce = os.environ.get("INPUT_RUNTIME_ENFORCE", "false").lower() == "true"
-
-print(f"[runtime] threshold={runtime_threshold}")
-print(f"[runtime] enforce={runtime_enforce}")
-
-if runtime_enforce:
-    print(f"[runtime] checking score {runtime_score} < {runtime_threshold}")
-    if runtime_score < runtime_threshold:
-        raise SystemExit(
-            f"❌ Runtime enforcement FAILED: {runtime_score} < {runtime_threshold}"
-        )
-    else:
-        print("✅ Runtime enforcement PASSED")
-
-# === END RUNTIME ENFORCEMENT ===
-
-
-
-# === END RUNTIME SIGNAL ===
-
-PY -m godscore_ci.action_main
