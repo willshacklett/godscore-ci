@@ -1,0 +1,49 @@
+name: Runtime Signal Enforce Demo
+
+on:
+  workflow_dispatch:
+
+jobs:
+  runtime-enforce-demo:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install runtime deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-runtime.txt
+
+      - name: Generate runtime outputs
+        run: |
+          python scripts/runtime_signal.py examples/runtime_signal_input.csv
+
+      - name: Show runtime summary
+        run: |
+          cat outputs/runtime_signal/runtime_signal_input_summary.json
+
+      - name: Enforcement preview
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          data = json.loads(Path("outputs/runtime_signal/runtime_signal_input_summary.json").read_text())
+          score = data.get("godscore_runtime")
+          threshold = 50
+
+          print(f"runtime_score={score}")
+          print(f"threshold={threshold}")
+
+          if score < threshold:
+              raise SystemExit(f"Enforcement would fail: {score} < {threshold}")
+          else:
+              print("Enforcement would pass")
+          PY

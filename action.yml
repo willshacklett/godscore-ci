@@ -10,6 +10,10 @@ inputs:
     description: "Minimum runtime godscore (0-100)"
     required: false
     default: "50"
+  runtime_enforce:
+    description: "Fail build if runtime score is below runtime_threshold"
+    required: false
+    default: "false"
 
   score:
     description: "Optional. 0..1 or 0..100. Omit or set to 'auto' to compute AutoScore v1 -> GV -> GodScore."
@@ -74,6 +78,29 @@ print(f"Final score: {final_score}")
 
 score = final_score
 
+# === RUNTIME ENFORCEMENT ===
+import os
+
+runtime_threshold_raw = os.environ.get("INPUT_RUNTIME_THRESHOLD", "50")
+runtime_enforce_raw = os.environ.get("INPUT_RUNTIME_ENFORCE", "false").strip().lower()
+
+try:
+    runtime_threshold = int(runtime_threshold_raw)
+except ValueError:
+    runtime_threshold = 50
+
+runtime_enforce = runtime_enforce_raw == "true"
+
+print(f"Runtime threshold: {runtime_threshold}")
+print(f"Runtime enforce: {runtime_enforce}")
+
+if runtime_enforce and runtime_score < runtime_threshold:
+    raise SystemExit(
+        f"Runtime enforcement failed: runtime_score={runtime_score} < runtime_threshold={runtime_threshold}"
+    )
+
+# === END RUNTIME ENFORCEMENT ===
+
 # === END RUNTIME SIGNAL ===
 
 PY@v5
@@ -103,6 +130,29 @@ print(f"Runtime score: {runtime_score}")
 print(f"Final score: {final_score}")
 
 score = final_score
+
+# === RUNTIME ENFORCEMENT ===
+import os
+
+runtime_threshold_raw = os.environ.get("INPUT_RUNTIME_THRESHOLD", "50")
+runtime_enforce_raw = os.environ.get("INPUT_RUNTIME_ENFORCE", "false").strip().lower()
+
+try:
+    runtime_threshold = int(runtime_threshold_raw)
+except ValueError:
+    runtime_threshold = 50
+
+runtime_enforce = runtime_enforce_raw == "true"
+
+print(f"Runtime threshold: {runtime_threshold}")
+print(f"Runtime enforce: {runtime_enforce}")
+
+if runtime_enforce and runtime_score < runtime_threshold:
+    raise SystemExit(
+        f"Runtime enforcement failed: runtime_score={runtime_score} < runtime_threshold={runtime_threshold}"
+    )
+
+# === END RUNTIME ENFORCEMENT ===
 
 # === END RUNTIME SIGNAL ===
 
@@ -136,6 +186,29 @@ print(f"Runtime score: {runtime_score}")
 print(f"Final score: {final_score}")
 
 score = final_score
+
+# === RUNTIME ENFORCEMENT ===
+import os
+
+runtime_threshold_raw = os.environ.get("INPUT_RUNTIME_THRESHOLD", "50")
+runtime_enforce_raw = os.environ.get("INPUT_RUNTIME_ENFORCE", "false").strip().lower()
+
+try:
+    runtime_threshold = int(runtime_threshold_raw)
+except ValueError:
+    runtime_threshold = 50
+
+runtime_enforce = runtime_enforce_raw == "true"
+
+print(f"Runtime threshold: {runtime_threshold}")
+print(f"Runtime enforce: {runtime_enforce}")
+
+if runtime_enforce and runtime_score < runtime_threshold:
+    raise SystemExit(
+        f"Runtime enforcement failed: runtime_score={runtime_score} < runtime_threshold={runtime_threshold}"
+    )
+
+# === END RUNTIME ENFORCEMENT ===
 
 # === END RUNTIME SIGNAL ===
 
@@ -172,6 +245,29 @@ print(f"Runtime score: {runtime_score}")
 print(f"Final score: {final_score}")
 
 score = final_score
+
+# === RUNTIME ENFORCEMENT ===
+import os
+
+runtime_threshold_raw = os.environ.get("INPUT_RUNTIME_THRESHOLD", "50")
+runtime_enforce_raw = os.environ.get("INPUT_RUNTIME_ENFORCE", "false").strip().lower()
+
+try:
+    runtime_threshold = int(runtime_threshold_raw)
+except ValueError:
+    runtime_threshold = 50
+
+runtime_enforce = runtime_enforce_raw == "true"
+
+print(f"Runtime threshold: {runtime_threshold}")
+print(f"Runtime enforce: {runtime_enforce}")
+
+if runtime_enforce and runtime_score < runtime_threshold:
+    raise SystemExit(
+        f"Runtime enforcement failed: runtime_score={runtime_score} < runtime_threshold={runtime_threshold}"
+    )
+
+# === END RUNTIME ENFORCEMENT ===
 
 # === END RUNTIME SIGNAL ===
 

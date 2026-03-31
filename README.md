@@ -274,3 +274,19 @@ GitHub Actions demo workflow:
 - .github/workflows/runtime-signal-demo.yml
 
 This is an advisory runtime slice for pressure-testing recoverability-aware detection inside the GodScore-CI repo without changing the existing core action behavior.
+
+## Runtime enforcement
+
+Advisory mode remains the default.
+
+New inputs:
+- runtime_mode
+- runtime_threshold
+- runtime_enforce
+
+Intended behavior:
+- runtime_enforce=false -> advisory only
+- runtime_enforce=true -> fail build if runtime score is below runtime_threshold
+
+Example intent:
+- If the runtime signal detects non-recoverability strongly enough, CI can fail even when snapshot checks still look green.
