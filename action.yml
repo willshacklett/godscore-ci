@@ -76,6 +76,34 @@ print(f"Base score: {score}")
 print(f"Runtime score: {runtime_score}")
 print(f"Final score: {final_score}")
 
+# === FUSED ENFORCEMENT ===
+import json
+from pathlib import Path
+
+fused_path = Path("outputs/runtime_signal/runtime_fused_summary.json")
+
+fused_status = "SAFE"
+
+if fused_path.exists():
+    try:
+        data = json.loads(fused_path.read_text())
+        fused_status = data.get("fused_status", "SAFE")
+        print(f"Fused status: {fused_status}")
+    except Exception as e:
+        print(f"Fused read error: {e}")
+
+# enforcement toggle (default ON for now)
+runtime_enforce = True
+
+if runtime_enforce:
+    if fused_status == "CRITICAL":
+        raise SystemExit("❌ CI FAIL: Fused runtime status = CRITICAL")
+    elif fused_status == "AT RISK":
+        print("⚠️ CI WARN: Fused status = AT RISK")
+    else:
+        print("✅ CI PASS: Fused status = SAFE")
+
+
 score = final_score
 
 # === RUNTIME ENFORCEMENT ===
@@ -130,6 +158,34 @@ final_score = min(score, runtime_score)
 print(f"Base score: {score}")
 print(f"Runtime score: {runtime_score}")
 print(f"Final score: {final_score}")
+
+# === FUSED ENFORCEMENT ===
+import json
+from pathlib import Path
+
+fused_path = Path("outputs/runtime_signal/runtime_fused_summary.json")
+
+fused_status = "SAFE"
+
+if fused_path.exists():
+    try:
+        data = json.loads(fused_path.read_text())
+        fused_status = data.get("fused_status", "SAFE")
+        print(f"Fused status: {fused_status}")
+    except Exception as e:
+        print(f"Fused read error: {e}")
+
+# enforcement toggle (default ON for now)
+runtime_enforce = True
+
+if runtime_enforce:
+    if fused_status == "CRITICAL":
+        raise SystemExit("❌ CI FAIL: Fused runtime status = CRITICAL")
+    elif fused_status == "AT RISK":
+        print("⚠️ CI WARN: Fused status = AT RISK")
+    else:
+        print("✅ CI PASS: Fused status = SAFE")
+
 
 score = final_score
 
