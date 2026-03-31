@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import argparse
 import json
-from pathlib import Path
 import os
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -33,11 +33,13 @@ def compute_runtime_signal(df: pd.DataFrame):
 
     dsdt = x.diff().fillna(0.0)
 
+    # adaptive dS/dt gating
     dsdt_med = dsdt.rolling(20, min_periods=5).median().fillna(0.0)
     dsdt_mad = (dsdt - dsdt_med).abs().rolling(20, min_periods=5).median().fillna(0.0)
     adaptive_thr = dsdt_med + 2.2 * (1.4826 * dsdt_mad + 0.003)
     spike = dsdt > adaptive_thr
 
+    # entropy velocity veto layer (transient filter only)
     d2sdt = dsdt.diff().fillna(0.0)
     vel_decay = d2sdt < -0.002
     spike = spike & (~vel_decay)
@@ -72,7 +74,6 @@ def compute_runtime_signal(df: pd.DataFrame):
     )
 
     warned = (gv >= 0.65) & ((persistence >= 0.35) | (lag >= 0.20))
-
     first = first_true(warned.values)
 
     enriched = df.copy()
@@ -91,7 +92,8 @@ def compute_runtime_signal(df: pd.DataFrame):
     max_lag = float(lag.max())
     warned_any = bool(warned.any())
 
-    risk = float(np.clip(max(max_gv, max_lag), 0.0, 1.0))
+    # weighted runtime risk -> smoother GodScore mapping
+    risk = float(np.clip(0.6 * max_gv + 0.4 * max_lag, 0.0, 1.0))
     godscore = int(round(100 * (1.0 - risk)))
 
     summary = {

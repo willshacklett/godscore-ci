@@ -26,37 +26,26 @@ jobs:
 
       - name: Runtime badge summary
         run: |
-          python - <<'PY2'
-          import json, os
-          from pathlib import Path
-
-          data = json.loads(Path("outputs/runtime_signal/runtime_signal_input_summary.json").read_text())
-
-          score = int(data.get("godscore_runtime", 100))
-          warned = data.get("warned")
-          t = data.get("first_warning_t")
-
-          if score >= 80:
-              badge = "SAFE"
-          elif score >= 50:
-              badge = "AT RISK"
-          else:
-              badge = "CRITICAL"
-
-          lines = [
-              "# GodScore Runtime Summary",
-              "",
-              f"- Badge: **{badge}**",
-              f"- Score: **{score}**",
-              f"- Warned: **{warned}**",
-              f"- First Warning t: **{t}**",
-          ]
-
-          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as f:
-              f.write("\n".join(lines) + "\n")
-
-          print("\n".join(lines))
-          PY2
+          python -c "
+import json, os
+from pathlib import Path
+data = json.loads(Path('outputs/runtime_signal/runtime_signal_input_summary.json').read_text())
+score = int(data.get('godscore_runtime', 100))
+warned = data.get('warned')
+t = data.get('first_warning_t')
+badge = 'SAFE' if score >= 80 else ('AT RISK' if score >= 50 else 'CRITICAL')
+lines = [
+    '# GodScore Runtime Summary',
+    '',
+    f'- Badge: **{badge}**',
+    f'- Score: **{score}**',
+    f'- Warned: **{warned}**',
+    f'- First Warning t: **{t}**',
+]
+with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as f:
+    f.write('\n'.join(lines) + '\n')
+print('\n'.join(lines))
+"
 
       - name: PR Runtime Comment
         if: github.event_name == 'pull_request'
@@ -64,7 +53,6 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-
             const data = JSON.parse(
               fs.readFileSync('outputs/runtime_signal/runtime_signal_input_summary.json', 'utf8')
             );

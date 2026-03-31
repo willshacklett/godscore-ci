@@ -300,3 +300,21 @@ Current advisory badge mapping:
 - CRITICAL -> runtime score 0-49
 
 This badge is meant to make trajectory-level risk visible inside CI runs before full enforcement is enabled.
+
+## Runtime Signal (experimental integration)
+
+GodScore-CI now includes an advisory runtime irreversibility slice.
+
+Current shape:
+- spike -> candidate
+- persistence + failed recovery -> confirmation
+- adaptive dS/dt -> noise-aware candidate gating
+- entropy velocity -> transient veto only
+
+Workflow:
+- .github/workflows/runtime-signal-demo.yml
+
+Badge mapping:
+- SAFE -> 80-100
+- AT RISK -> 50-79
+- CRITICAL -> 0-49
