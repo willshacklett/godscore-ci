@@ -28,24 +28,63 @@ jobs:
       - name: Adaptive threshold
         run: python scripts/runtime_adaptive_threshold.py
 
-      - name: Enforcement
+      - name: Fusion
+        run: python scripts/runtime_fusion.py
+
+      - name: Upload runtime artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-history
+          path: |
+            outputs/runtime_signal/runtime_history.jsonl
+            outputs/runtime_signal/runtime_drift_summary.json
+            outputs/runtime_signal/runtime_adaptive_summary.json
+            outputs/runtime_signal/runtime_signal_input_summary.json
+            outputs/runtime_signal/runtime_fused_summary.json
+
+      - name: Fused summary
         run: |
-          python - << 'PY'
-import json
-from pathlib import Path
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
 
-data = json.loads(Path("outputs/runtime_signal/runtime_adaptive_summary.json").read_text())
+          data = json.loads(Path("outputs/runtime_signal/runtime_fused_summary.json").read_text())
 
-score = data["latest_score"]
-threshold = data["adaptive_threshold"]
-fail = data["fail"]
+          lines = [
+              "# Runtime Fusion Summary",
+              "",
+              f"- Fused Status: **{data['fused_status']}**",
+              f"- Fused Score: **{data['fused_score']}**",
+              f"- Static Score: **{data['static_score']}**",
+              f"- Runtime Score: **{data['runtime_score']}**",
+              f"- Drift Detected: **{data['drift_detected']}**",
+              f"- Adaptive Fail: **{data['adaptive_fail']}**",
+          ]
 
-print(f"score={score}")
-print(f"threshold={threshold}")
-print(f"fail={fail}")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as f:
+              f.write("\\n".join(lines) + "\\n")
 
-if fail:
-    raise SystemExit(f"❌ FAIL: {score} < {threshold}")
-else:
-    print("✅ PASS")
-PY
+          print("\\n".join(lines))
+          PY
+
+      - name: Fused enforcement
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          data = json.loads(Path("outputs/runtime_signal/runtime_fused_summary.json").read_text())
+
+          fused_score = data["fused_score"]
+          fused_status = data["fused_status"]
+
+          print(f"fused_score={fused_score}")
+          print(f"fused_status={fused_status}")
+
+          if fused_status == "CRITICAL":
+              raise SystemExit(f"❌ FUSED FAIL: status={fused_status}, score={fused_score}")
+          elif fused_status == "AT RISK":
+              print("⚠ Fused system at risk")
+          else:
+              print("✅ Fused system stable")
+          PY

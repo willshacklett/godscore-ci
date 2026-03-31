@@ -91,9 +91,9 @@
       return res.text();
     }
 
-    function badgeClass(score, fail, drift) {
-      if (fail || score < 50) return "bad";
-      if (drift || score < 80) return "warn";
+    function badgeClass(status) {
+      if (status === "CRITICAL") return "bad";
+      if (status === "AT RISK") return "warn";
       return "safe";
     }
 
@@ -106,6 +106,7 @@
         const adaptive = await loadJson("./data/runtime_adaptive_summary.json");
         const drift = await loadJson("./data/runtime_drift_summary.json");
         const base = await loadJson("./data/runtime_signal_input_summary.json");
+        const fused = await loadJson("./data/runtime_fused_summary.json");
         const historyText = await loadText("./data/runtime_history.jsonl");
 
         debug.textContent =
@@ -113,43 +114,35 @@
           "- runtime_adaptive_summary.json\n" +
           "- runtime_drift_summary.json\n" +
           "- runtime_signal_input_summary.json\n" +
+          "- runtime_fused_summary.json\n" +
           "- runtime_history.jsonl";
 
-        const score = adaptive.latest_score ?? base.godscore_runtime ?? "n/a";
-        const threshold = adaptive.adaptive_threshold ?? "n/a";
-        const volatility = adaptive.volatility ?? "n/a";
-        const fail = !!adaptive.fail;
-        const driftDetected = !!drift.drift_detected;
-        const warned = !!base.warned;
-        const firstWarning = base.first_warning_t ?? "None";
-
-        const cls = badgeClass(score, fail, driftDetected);
-        const badgeText = fail ? "FAIL" : (driftDetected ? "DRIFTING" : "PASS");
+        const cls = badgeClass(fused.fused_status);
 
         status.innerHTML = `
           <div class="card">
-            <div class="label">Runtime Status</div>
-            <div class="value ${cls}">${badgeText}</div>
+            <div class="label">Fused Status</div>
+            <div class="value ${cls}">${fused.fused_status}</div>
+          </div>
+          <div class="card">
+            <div class="label">Fused Score</div>
+            <div class="value">${fused.fused_score}</div>
+          </div>
+          <div class="card">
+            <div class="label">Static Score</div>
+            <div class="value">${fused.static_score}</div>
           </div>
           <div class="card">
             <div class="label">Runtime Score</div>
-            <div class="value">${score}</div>
+            <div class="value">${fused.runtime_score}</div>
           </div>
           <div class="card">
             <div class="label">Adaptive Threshold</div>
-            <div class="value">${threshold}</div>
-          </div>
-          <div class="card">
-            <div class="label">Volatility</div>
-            <div class="value">${volatility}</div>
-          </div>
-          <div class="card">
-            <div class="label">Warned</div>
-            <div class="value">${warned}</div>
+            <div class="value">${adaptive.adaptive_threshold}</div>
           </div>
           <div class="card">
             <div class="label">First Warning t</div>
-            <div class="value">${firstWarning}</div>
+            <div class="value">${base.first_warning_t ?? "None"}</div>
           </div>
         `;
 
