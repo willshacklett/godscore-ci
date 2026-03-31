@@ -228,3 +228,8 @@ if runtime_enforce:
     else:
         print("✅ Runtime enforcement PASSED")
 
+
+
+branding:
+  icon: shield
+  color: blue

@@ -1,33 +1,69 @@
-# GodScore CI
+# GodScore CI — Marketplace Positioning Draft
 
-A survivability-aware CI gate that flags risky change early — and can **block merges** when enforcement is enabled.
+## One-line description
 
-## What it does
-- Computes a **GodScore** for a change (you provide the score)
-- Compares it to a **threshold**
-- Runs in CI on every push / PR
-- Writes a clean GitHub Actions step summary
-- Optionally tracks recent successful runs for regression awareness
+GodScore CI turns CI into a trust signal with memory.
 
-## Free vs Paid
-**Free (advisory):**
-- Prints warnings and guidance
-- **Never fails your build**
+## Short description
 
-**Paid ($10/month per repo) — Enforcement:**
-- Enables **build blocking**
-- Fails CI when `godscore < threshold`
-- Makes risk non-optional
+GodScore CI assigns a 0–100 trust score to changes and can enforce based on trajectory-aware runtime risk, not just snapshot checks.
 
-> Free informs. Paid enforces.
+## Value proposition
 
-## Quick example
+Most CI systems answer:
+- did tests pass?
+- did lint pass?
+- did coverage pass?
 
-### Free (warn-only)
-```yaml
-- name: GodScore CI (Free)
-  uses: willshacklett/godscore-ci@v0.2.4
-  with:
-    score: "0.85"
-    threshold: "0.80"
-    enforce: "false"
+GodScore CI also answers:
+- is the system still recoverable?
+- is it drifting toward non-recoverability?
+- should this change still be trusted even if the snapshot is green?
+
+## Key product claims
+
+- trust score with memory
+- trajectory-aware runtime signal
+- drift detection across runs
+- adaptive thresholds
+- fused static + runtime enforcement
+- dashboard visibility
+
+## Best-fit users
+
+- teams that care about reliability under drift
+- AI / eval pipelines
+- CI/CD maintainers
+- infra / platform teams
+- teams worried about “green but degrading” systems
+
+## Differentiator
+
+Traditional CI:
+- pass/fail snapshots
+
+GodScore CI:
+- trend-aware trust boundary
+- runtime irreversibility signal
+- recoverability-aware enforcement
+
+## Suggested categories
+
+- Continuous Integration
+- Code Quality
+- DevOps
+- AI / Runtime Safety
+- Monitoring / Reliability
+
+## Suggested pricing concept
+
+- Free: advisory scoring + dashboard visibility
+- Paid: enforced thresholds + advanced runtime / trend policies
+
+## Suggested headline
+
+Detect failure before failure.
+
+## Suggested subheadline
+
+Trajectory-aware CI with recoverability, memory, and runtime enforcement.

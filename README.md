@@ -1,320 +1,155 @@
-> **Start here (Hub):** https://github.com/willshacklett/god-variable-theory  
-> One-click ecosystem map • demos • CI enforcement • runtime monitoring
-
 # GodScore CI
 
-GodScore CI assigns a single, explainable trust score (0–100) to every commit and tracks how that trust changes over time.
+GodScore CI turns CI into a trust signal with memory.
+
+Instead of only asking whether a build passes right now, GodScore CI asks whether the system is still recoverable over time.
 
 Live Dashboard  
 https://willshacklett.github.io/godscore-ci/dashboard/
 
-Enforcement Demo Workflow  
-See .github/workflows/godscore-enforcement-demo.yml
-
-Dashboard Source (GitHub Pages)  
-https://github.com/willshacklett/godscore-ci/tree/main/dashboard
-
----
-
 ## What it does
 
-GodScore CI turns CI into a trust signal with memory.
+GodScore CI assigns a normalized trust score (0–100) and can now incorporate a runtime irreversibility signal.
 
-Unlike traditional pass/fail CI checks, GodScore CI:
+Core layers:
+- static CI score -> snapshot quality
+- runtime signal -> trajectory risk
+- drift detection -> repeated non-recoverability
+- adaptive threshold -> context-aware enforcement
+- fusion -> one final trust boundary
 
-- Tracks quality and risk over time
-- Explains why trust moved
-- Supports governance, recovery, and survivability
-- Can optionally enforce when risk crosses a threshold
+This means a system can fail CI even when snapshot checks are still green, if trajectory-level recoverability has already broken down.
 
-Each run produces:
-- GodScore — normalized trust score
-- Explanation — contributing factors
-- History — trend across commits
-- Optional enforcement — block builds when trust drops too low
+## Runtime signal shape
 
----
+Current runtime logic:
 
-## The scoring spine: GV (God Variable)
-
-GodScore CI is powered by GV (God Variable) — a universal scalar that measures:
-
-Loss of recoverability under constraint
-
-- Lower GV is better
-- GodScore = 1 − GV
-- GV aggregates explainable penalty components
-- GV is designed to apply across domains (code today, AI and safety systems next)
-
-GV does not judge intent, correctness, or morality.  
-It measures whether a system is becoming harder to recover safely over time.
-
----
-
-## Quick Start
-
-Inform-only (free)
-
-Example workflow step:
-
-    - uses: actions/checkout@v4
-
-    - name: GodScore CI (AutoScore v1)
-      uses: willshacklett/godscore-ci@v0.2.6
-      with:
-        threshold: "0.80"
-        mode: "free"
-        enforce: "false"
-
-That’s it.
-
-GodScore CI will compute a score, explain it in logs, and update the dashboard without blocking your build.
-
----
-
-## Manual score input (still supported)
-
-Example:
-
-    - uses: willshacklett/godscore-ci@v0.2.6
-      with:
-        score: "0.85"      # or "85"
-        threshold: "0.80"  # or "80"
-        mode: "free"
-
-Inputs accept 0–1 or 0–100.  
-All values are normalized internally.
-
----
-
-## Why GodScore
-
-Most CI systems answer one question:
-
-Did it pass?
-
-GodScore answers better ones:
-
-- Are we getting healthier or riskier over time?
-- What specifically caused this change?
-- Can we recover — and how fast?
-- Is risk becoming irreversible?
-
-GodScore turns CI from a binary gate into a trust signal with memory.
-
----
-
-## AutoScore v1 (default scoring)
-
-When score is omitted or set to auto, AutoScore v1 computes penalties automatically and feeds them into GV.
-
-AutoScore v1 currently uses:
-
-- Diff size (lines added + deleted)
-- Risky paths touched (src/, lib/, app/, api/, infra/)
-- High-risk areas (auth, security, payments, billing)
-- Process signals:
-  - WIP / tmp / draft commits
-  - Tests detected (or not)
-  - Reverts (small recovery credit)
-
-These signals become normalized penalty components that GV aggregates into a single GodScore.
-
----
-
-## Enforcement
-
-GodScore CI supports two modes.
-
-Free — inform only:
-- Prints guidance in CI logs
-- Updates dashboard
-- Never blocks builds
-
-Pro — enforce:
-- Can fail the build when trust drops below threshold
-- Designed for governance and policy use
-
-Example enforcement step:
-
-    - uses: willshacklett/godscore-ci@v0.2.6
-      with:
-        threshold: "0.80"
-        mode: "pro"
-        enforce: "true"
-
-Free informs. Paid enforces.
-
-The included enforcement demo workflow intentionally fails in enforcement mode to prove the gate blocks when GodScore is below threshold.
-
----
-
-## Score scale and precedence
-
-Scale:
-- Inputs accept 0–1 or 0–100
-- Outputs are normalized 0–1
-- Logs print both normalized and human-readable values
-
-Precedence:
-1. If score is provided, it is evaluated directly
-2. If score is omitted or auto, AutoScore v1 → GV → GodScore
-3. Enforcement triggers only when:
-   - mode = pro
-   - enforce = true
-   - score < threshold
-
----
-
-## Dashboard
-
-GodScore CI automatically publishes a live dashboard showing:
-
-- Latest GodScore
-- Historical trend
-- Commit-level history
-- Explanation of score changes
-- Enforcement context
-
-The dashboard updates on every push via GitHub Actions.
-
-https://willshacklett.github.io/godscore-ci/dashboard/
-
----
-
-## Pricing
-
-Free tier:
-- Computes GodScore
-- Prints guidance in CI logs
-- Publishes dashboard and history
-- Never blocks builds
-
-Paid tier — $10/month per repo:
-- Enables enforcement mode
-- Can fail builds when trust drops too low
-- Designed for governance, compliance, and policy use
-
-Free informs. Paid enforces.
-
----
-
-## Inputs
-
-- score — Optional. GodScore to evaluate (0–1 or 0–100)
-- threshold — Minimum acceptable score
-- min_score — Alias for threshold
-- mode — free (warn) or pro (fail)
-- enforce — Explicit enforcement toggle
-- pro_token — Reserved for future use
-
----
-
-## Outputs
-
-- godscore — Final normalized score (0–1)
-- gv — Computed GV value (0–1)
-- passed — Whether the gate passed
-- effective_mode — Resolved mode
-- score_source — manual or auto
-
----
-
-## Design philosophy
-
-- Honesty over green lights
-- Trends matter more than snapshots
-- Governance is about recovery, not punishment
-- Survivability beats perfection
-
----
-
-## Roadmap
-
-- Expanded GV engine
-- Component-level breakdowns
-- Organization-wide dashboards
-- Compliance exports
-- Enterprise and safety integrations
-
----
-
-## Author
-
-William Shacklett
-
----
-
-GodScore CI is not about stopping change.  
-It’s about surviving it.
-
----
-
-## Runtime Signal (experimental integration)
-
-GodScore-CI can also be used as a runtime-style irreversibility detector.
-
-Current signal shape:
-- spike -> candidate
-- persistence + failed recovery -> confirmation
-- adaptive dS/dt -> noise-aware candidate refinement
-- entropy velocity -> transient veto only
-
-Minimal local run:
-1. python3 -m venv .venv
-2. source .venv/bin/activate
-3. pip install -r requirements-runtime.txt
-4. python scripts/runtime_signal.py examples/runtime_signal_input.csv
-
-This writes:
-- outputs/runtime_signal/runtime_signal_input_enriched.csv
-- outputs/runtime_signal/runtime_signal_input_summary.json
-
-GitHub Actions demo workflow:
-- .github/workflows/runtime-signal-demo.yml
-
-This is an advisory runtime slice for pressure-testing recoverability-aware detection inside the GodScore-CI repo without changing the existing core action behavior.
-
-## Runtime enforcement
-
-Advisory mode remains the default.
-
-New inputs:
-- runtime_mode
-- runtime_threshold
-- runtime_enforce
-
-Intended behavior:
-- runtime_enforce=false -> advisory only
-- runtime_enforce=true -> fail build if runtime score is below runtime_threshold
-
-Example intent:
-- If the runtime signal detects non-recoverability strongly enough, CI can fail even when snapshot checks still look green.
-
-## Runtime badge semantics
-
-Current advisory badge mapping:
-
-- SAFE -> runtime score 80-100
-- AT RISK -> runtime score 50-79
-- CRITICAL -> runtime score 0-49
-
-This badge is meant to make trajectory-level risk visible inside CI runs before full enforcement is enabled.
-
-## Runtime Signal (experimental integration)
-
-GodScore-CI now includes an advisory runtime irreversibility slice.
-
-Current shape:
 - spike -> candidate
 - persistence + failed recovery -> confirmation
 - adaptive dS/dt -> noise-aware candidate gating
 - entropy velocity -> transient veto only
+- fusion -> final trust boundary
 
-Workflow:
-- .github/workflows/runtime-signal-demo.yml
+## Status semantics
 
-Badge mapping:
-- SAFE -> 80-100
-- AT RISK -> 50-79
-- CRITICAL -> 0-49
+- SAFE -> system trajectory looks stable
+- AT RISK -> early warning / degrading recoverability
+- CRITICAL -> irreversibility signal strong enough to block CI
+
+## Why this matters
+
+Traditional CI is mostly snapshot-based:
+- pass / fail
+- lint / tests
+- coverage / static checks
+
+GodScore CI adds:
+- recoverability
+- trend memory
+- irreversibility detection
+- runtime-aware enforcement
+
+In short:
+
+GodScore CI is not just “did it pass?”
+It is “is this system still safe to trust?”
+
+## Current product surface
+
+### 1. Static score
+A normalized GodScore-style score for trust / survivability.
+
+### 2. Runtime signal
+A trajectory-aware signal that detects non-recoverability before visible failure.
+
+### 3. Drift detection
+Looks for persistent degradation across repeated runtime checks.
+
+### 4. Adaptive enforcement
+Thresholds adjust to system volatility instead of using a single rigid line.
+
+### 5. Fusion layer
+Combines static + runtime into one final decision boundary.
+
+### 6. Dashboard
+Published dashboard view with:
+- fused status
+- fused score
+- runtime score
+- threshold
+- warning history
+
+## Current dashboard views
+
+Main:
+- https://willshacklett.github.io/godscore-ci/dashboard/
+
+Runtime:
+- https://willshacklett.github.io/godscore-ci/dashboard/runtime/index.html
+
+## Workflow behavior
+
+Current fused behavior:
+
+- SAFE -> pass
+- AT RISK -> warn
+- CRITICAL -> fail
+
+This gives teams a visible, explainable, trajectory-aware CI gate.
+
+## Quick start
+
+### Local runtime demo
+1. Create and activate a venv
+2. Install runtime requirements
+3. Run the runtime signal
+4. Inspect outputs and dashboard
+
+Example:
+
+python3 -m venv .venv  
+source .venv/bin/activate  
+pip install -r requirements-runtime.txt  
+python scripts/runtime_signal.py examples/runtime_signal_input.csv
+
+### GitHub Actions
+Run:
+- Runtime Signal Demo
+
+This produces:
+- runtime score
+- drift summary
+- adaptive summary
+- fused summary
+- dashboard-visible artifacts
+
+## Positioning
+
+GodScore CI is best understood as:
+
+- trajectory-aware CI
+- recoverability-aware enforcement
+- trust scoring with memory
+- early irreversibility detection for software systems
+
+## Tagline options
+
+- Honesty over green lights
+- Trends matter more than snapshots
+- Detect failure before failure
+- CI with memory
+- Recoverability-aware enforcement
+
+## Current maturity
+
+This repo now supports:
+- advisory runtime scoring
+- fused runtime/static view
+- dashboard visibility
+- workflow-level fused enforcement
+
+That makes it suitable for real-world pressure testing and early adopter usage.
+
+## License
+
+See repository license.
