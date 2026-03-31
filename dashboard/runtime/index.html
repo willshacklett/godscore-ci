@@ -20,8 +20,8 @@
 
 <script>
 async function load() {
-  const summary = await fetch('../../outputs/runtime_signal/runtime_adaptive_summary.json').then(r => r.json());
-  const historyText = await fetch('../../outputs/runtime_signal/runtime_history.jsonl').then(r => r.text());
+  const summary = await fetch('./data/runtime_adaptive_summary.json').then(r => r.json());
+  const historyText = await fetch('./data/runtime_history.jsonl').then(r => r.text());
 
   const history = historyText.trim().split('\n').map(JSON.parse);
 
