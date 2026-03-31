@@ -247,3 +247,30 @@ William Shacklett
 
 GodScore CI is not about stopping change.  
 It’s about surviving it.
+
+---
+
+## Runtime Signal (experimental integration)
+
+GodScore-CI can also be used as a runtime-style irreversibility detector.
+
+Current signal shape:
+- spike -> candidate
+- persistence + failed recovery -> confirmation
+- adaptive dS/dt -> noise-aware candidate refinement
+- entropy velocity -> transient veto only
+
+Minimal local run:
+1. python3 -m venv .venv
+2. source .venv/bin/activate
+3. pip install -r requirements-runtime.txt
+4. python scripts/runtime_signal.py examples/runtime_signal_input.csv
+
+This writes:
+- outputs/runtime_signal/runtime_signal_input_enriched.csv
+- outputs/runtime_signal/runtime_signal_input_summary.json
+
+GitHub Actions demo workflow:
+- .github/workflows/runtime-signal-demo.yml
+
+This is an advisory runtime slice for pressure-testing recoverability-aware detection inside the GodScore-CI repo without changing the existing core action behavior.

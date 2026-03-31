@@ -1,0 +1,57 @@
+name: Runtime Signal Demo
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/runtime_signal.py'
+      - 'examples/runtime_signal_input.csv'
+      - '.github/workflows/runtime-signal-demo.yml'
+      - 'requirements-runtime.txt'
+
+jobs:
+  runtime-signal:
+    runs-on: ubuntu-latest
+    outputs:
+      warned: ${{ steps.signal.outputs.warned }}
+      first_warning_t: ${{ steps.signal.outputs.first_warning_t }}
+      max_gv: ${{ steps.signal.outputs.max_gv }}
+      max_persistence: ${{ steps.signal.outputs.max_persistence }}
+      max_lag: ${{ steps.signal.outputs.max_lag }}
+      godscore_runtime: ${{ steps.signal.outputs.godscore_runtime }}
+      effective_mode: ${{ steps.signal.outputs.effective_mode }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install runtime deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-runtime.txt
+
+      - name: Run runtime signal
+        id: signal
+        run: |
+          python scripts/runtime_signal.py examples/runtime_signal_input.csv
+
+      - name: Print outputs
+        run: |
+          echo "warned=${{ steps.signal.outputs.warned }}"
+          echo "first_warning_t=${{ steps.signal.outputs.first_warning_t }}"
+          echo "max_gv=${{ steps.signal.outputs.max_gv }}"
+          echo "max_persistence=${{ steps.signal.outputs.max_persistence }}"
+          echo "max_lag=${{ steps.signal.outputs.max_lag }}"
+          echo "godscore_runtime=${{ steps.signal.outputs.godscore_runtime }}"
+          echo "effective_mode=${{ steps.signal.outputs.effective_mode }}"
+
+      - name: Upload outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-signal-outputs
+          path: outputs/runtime_signal/*
