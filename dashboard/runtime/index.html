@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>GodScore Runtime</title>
+  <style>
+    body { font-family: Arial; padding: 20px; background: #111; color: #eee; }
+    h1 { color: #00ffcc; }
+    .card { margin: 10px 0; padding: 10px; border: 1px solid #333; }
+    .good { color: #00ff88; }
+    .warn { color: #ffaa00; }
+    .bad { color: #ff4444; }
+  </style>
+</head>
+<body>
+
+<h1>Runtime Signal Dashboard</h1>
+
+<div id="status"></div>
+<div id="history"></div>
+
+<script>
+async function load() {
+  const summary = await fetch('../../outputs/runtime_signal/runtime_adaptive_summary.json').then(r => r.json());
+  const historyText = await fetch('../../outputs/runtime_signal/runtime_history.jsonl').then(r => r.text());
+
+  const history = historyText.trim().split('\n').map(JSON.parse);
+
+  let statusClass = "good";
+  if (summary.fail) statusClass = "bad";
+  else if (summary.volatility > 5) statusClass = "warn";
+
+  document.getElementById("status").innerHTML = `
+    <div class="card ${statusClass}">
+      <b>Status:</b> ${summary.fail ? "FAIL" : "PASS"}<br>
+      <b>Score:</b> ${summary.latest_score}<br>
+      <b>Threshold:</b> ${summary.adaptive_threshold}<br>
+      <b>Volatility:</b> ${summary.volatility}
+    </div>
+  `;
+
+  let html = "<h2>History</h2>";
+
+  history.forEach(r => {
+    html += `<div class="card">
+      t: ${r.t_wall} | score: ${r.score} | warned: ${r.warned}
+    </div>`;
+  });
+
+  document.getElementById("history").innerHTML = html;
+}
+
+load();
+</script>
+
+</body>
+</html>
