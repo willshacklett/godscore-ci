@@ -1,69 +1,43 @@
-# GodScore CI — Marketplace Positioning Draft
+# GodScore CI — Marketplace Positioning
 
-## One-line description
+## One-line
+CI that detects failure before failure.
 
-GodScore CI turns CI into a trust signal with memory.
+## Description
+GodScore CI assigns a trust score to changes and enforces based on trajectory and recoverability — not just snapshot checks.
 
-## Short description
-
-GodScore CI assigns a 0–100 trust score to changes and can enforce based on trajectory-aware runtime risk, not just snapshot checks.
-
-## Value proposition
-
-Most CI systems answer:
+## Value
+Most CI answers:
 - did tests pass?
-- did lint pass?
-- did coverage pass?
 
-GodScore CI also answers:
+GodScore CI answers:
 - is the system still recoverable?
-- is it drifting toward non-recoverability?
-- should this change still be trusted even if the snapshot is green?
 
-## Key product claims
-
+## Key features
 - trust score with memory
-- trajectory-aware runtime signal
-- drift detection across runs
+- runtime irreversibility signal
+- drift detection
 - adaptive thresholds
-- fused static + runtime enforcement
+- fused enforcement
 - dashboard visibility
 
-## Best-fit users
-
-- teams that care about reliability under drift
-- AI / eval pipelines
-- CI/CD maintainers
-- infra / platform teams
-- teams worried about “green but degrading” systems
-
-## Differentiator
-
+## Differentiation
 Traditional CI:
-- pass/fail snapshots
+- snapshot-based
 
 GodScore CI:
-- trend-aware trust boundary
-- runtime irreversibility signal
-- recoverability-aware enforcement
+- trajectory-aware
+- recoverability-aware
+- blocks irreversible drift
 
-## Suggested categories
+## Ideal users
+- infra teams
+- CI/CD owners
+- AI / eval pipelines
+- reliability-focused orgs
 
-- Continuous Integration
-- Code Quality
-- DevOps
-- AI / Runtime Safety
-- Monitoring / Reliability
-
-## Suggested pricing concept
-
-- Free: advisory scoring + dashboard visibility
-- Paid: enforced thresholds + advanced runtime / trend policies
-
-## Suggested headline
-
+## Headline
 Detect failure before failure.
 
-## Suggested subheadline
-
-Trajectory-aware CI with recoverability, memory, and runtime enforcement.
+## Subheadline
+Trajectory-aware CI with recoverability and memory.
