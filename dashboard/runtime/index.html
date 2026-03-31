@@ -12,10 +12,7 @@
       color: #e8f0ff;
       font-family: Arial, sans-serif;
     }
-    h1 {
-      margin-top: 0;
-      color: #39f5d2;
-    }
+    h1 { margin-top: 0; color: #39f5d2; }
     .grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -48,9 +45,7 @@
       font-family: Consolas, monospace;
       font-size: 13px;
     }
-    .muted {
-      color: #9fb3d1;
-    }
+    .muted { color: #9fb3d1; }
     .error {
       white-space: pre-wrap;
       color: #ff8fa3;
@@ -103,18 +98,18 @@
       const historyEl = document.getElementById("history");
 
       try {
+        const fused = await loadJson("./data/runtime_fused_summary.json");
         const adaptive = await loadJson("./data/runtime_adaptive_summary.json");
         const drift = await loadJson("./data/runtime_drift_summary.json");
         const base = await loadJson("./data/runtime_signal_input_summary.json");
-        const fused = await loadJson("./data/runtime_fused_summary.json");
         const historyText = await loadText("./data/runtime_history.jsonl");
 
         debug.textContent =
           "Loaded:\n" +
+          "- runtime_fused_summary.json\n" +
           "- runtime_adaptive_summary.json\n" +
           "- runtime_drift_summary.json\n" +
           "- runtime_signal_input_summary.json\n" +
-          "- runtime_fused_summary.json\n" +
           "- runtime_history.jsonl";
 
         const cls = badgeClass(fused.fused_status);
@@ -150,16 +145,14 @@
           ? historyText.trim().split("\n").map(line => JSON.parse(line))
           : [];
 
-        if (!rows.length) {
-          historyEl.textContent = "No runtime history found.";
-          return;
-        }
+        historyEl.innerHTML = rows.length
+          ? rows.map(r => `
+              <div class="history-row">
+                t_wall=${r.t_wall} | score=${r.score} | warned=${r.warned} | first_warning_t=${r.first_warning_t}
+              </div>
+            `).join("")
+          : "No runtime history found.";
 
-        historyEl.innerHTML = rows.map(r => `
-          <div class="history-row">
-            t_wall=${r.t_wall} | score=${r.score} | warned=${r.warned} | first_warning_t=${r.first_warning_t}
-          </div>
-        `).join("");
       } catch (err) {
         debug.innerHTML = `<div class="error">${String(err)}</div>`;
         historyEl.innerHTML = `<div class="error">Dashboard failed to load data.</div>`;
