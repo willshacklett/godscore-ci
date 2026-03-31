@@ -290,3 +290,13 @@ Intended behavior:
 
 Example intent:
 - If the runtime signal detects non-recoverability strongly enough, CI can fail even when snapshot checks still look green.
+
+## Runtime badge semantics
+
+Current advisory badge mapping:
+
+- SAFE -> runtime score 80-100
+- AT RISK -> runtime score 50-79
+- CRITICAL -> runtime score 0-49
+
+This badge is meant to make trajectory-level risk visible inside CI runs before full enforcement is enabled.

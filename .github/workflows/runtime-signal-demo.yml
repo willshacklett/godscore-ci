@@ -50,6 +50,44 @@ jobs:
           echo "godscore_runtime=${{ steps.signal.outputs.godscore_runtime }}"
           echo "effective_mode=${{ steps.signal.outputs.effective_mode }}"
 
+      - name: Runtime badge summary
+        run: |
+          python - <<'PY2'
+          import json
+          from pathlib import Path
+          import os
+
+          summary_path = Path("outputs/runtime_signal/runtime_signal_input_summary.json")
+          data = json.loads(summary_path.read_text())
+
+          score = int(data.get("godscore_runtime", 100))
+          warned = bool(data.get("warned", False))
+          first_warning_t = data.get("first_warning_t")
+
+          if score >= 80:
+              badge = "SAFE"
+          elif score >= 50:
+              badge = "AT RISK"
+          else:
+              badge = "CRITICAL"
+
+          lines = [
+              "# GodScore Runtime Summary",
+              "",
+              f"- Badge: **{badge}**",
+              f"- Runtime Score: **{score}**",
+              f"- Warned: **{warned}**",
+              f"- First Warning t: **{first_warning_t}**",
+          ]
+
+          summary_file = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summary_file:
+              with open(summary_file, "a", encoding="utf-8") as f:
+                  f.write("\n".join(lines) + "\n")
+
+          print("\n".join(lines))
+          PY2
+
       - name: Upload outputs
         uses: actions/upload-artifact@v4
         with:
