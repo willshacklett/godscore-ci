@@ -81,15 +81,15 @@ jobs:
 
             const body = `## 🔍 GodScore Runtime Signal
 
-            **Status:** ${badge}
-            **Score:** ${score}
-            **Warned:** ${warned}
-            **First Warning t:** ${t}
+Status: ${badge}
+Score: ${score}
+Warned: ${warned}
+First Warning t: ${t}
 
-            ${score < 50 ? "❌ High irreversibility risk detected" : ""}
-            ${score >= 50 && score < 80 ? "⚠ Early warning signal detected" : ""}
-            ${score >= 80 ? "✅ System trajectory stable" : ""}
-            `;
+${score < 50 ? "❌ High irreversibility risk detected" : ""}
+${score >= 50 && score < 80 ? "⚠ Early warning signal detected" : ""}
+${score >= 80 ? "✅ System trajectory stable" : ""}
+`;
 
             await github.rest.issues.createComment({
               issue_number: context.issue.number,
