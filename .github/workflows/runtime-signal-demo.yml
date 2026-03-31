@@ -29,36 +29,36 @@ jobs:
       - name: Runtime badge summary
         run: |
           python - <<'PY'
-          import json, os
-          from pathlib import Path
+import json, os
+from pathlib import Path
 
-          data = json.loads(Path("outputs/runtime_signal/runtime_signal_input_summary.json").read_text())
+data = json.loads(Path("outputs/runtime_signal/runtime_signal_input_summary.json").read_text())
 
-          score = int(data.get("godscore_runtime", 100))
-          warned = data.get("warned")
-          t = data.get("first_warning_t")
+score = int(data.get("godscore_runtime", 100))
+warned = data.get("warned")
+t = data.get("first_warning_t")
 
-          if score >= 80:
-              badge = "SAFE"
-          elif score >= 50:
-              badge = "AT RISK"
-          else:
-              badge = "CRITICAL"
+if score >= 80:
+    badge = "SAFE"
+elif score >= 50:
+    badge = "AT RISK"
+else:
+    badge = "CRITICAL"
 
-          lines = [
-              "# GodScore Runtime Summary",
-              "",
-              f"- Badge: **{badge}**",
-              f"- Score: **{score}**",
-              f"- Warned: **{warned}**",
-              f"- First Warning t: **{t}**",
-          ]
+lines = [
+    "# GodScore Runtime Summary",
+    "",
+    f"- Badge: **{badge}**",
+    f"- Score: **{score}**",
+    f"- Warned: **{warned}**",
+    f"- First Warning t: **{t}**",
+]
 
-          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
-              f.write("\n".join(lines) + "\n")
+with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
+    f.write("\n".join(lines) + "\n")
 
-          print("\n".join(lines))
-          PY
+print("\n".join(lines))
+PY
 
       - name: PR Runtime Comment
         if: github.event_name == 'pull_request'
