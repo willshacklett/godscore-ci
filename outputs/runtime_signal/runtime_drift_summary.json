@@ -1,0 +1,8 @@
+{
+  "enough_history": true,
+  "drift_detected": true,
+  "reason": "warn_count_recent=3, latest_score=13",
+  "latest_score": 13,
+  "score_slope": 0.0,
+  "warn_count_recent": 3
+}
