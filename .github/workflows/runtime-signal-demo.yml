@@ -77,6 +77,11 @@ ${score >= 50 && score < 80 ? "⚠ Early warning signal detected" : ""}
 ${score >= 80 ? "✅ System trajectory stable" : ""}
 `;
 
+            // === RUNTIME ENFORCEMENT ===
+            if (score < 50) {
+              core.setFailed(`Runtime FAIL: ${score} < 50`);
+            }
+
             await github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
