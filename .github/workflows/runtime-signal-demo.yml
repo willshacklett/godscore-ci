@@ -93,3 +93,43 @@ jobs:
         with:
           name: runtime-signal-outputs
           path: outputs/runtime_signal/*
+
+
+      - name: PR Runtime Comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+
+            const data = JSON.parse(
+              fs.readFileSync('outputs/runtime_signal/runtime_signal_input_summary.json', 'utf8')
+            );
+
+            const score = data.godscore_runtime || 100;
+            const warned = data.warned;
+            const t = data.first_warning_t;
+
+            let badge = "SAFE";
+            if (score < 50) badge = "CRITICAL";
+            else if (score < 80) badge = "AT RISK";
+
+            const body = `
+## 🔍 GodScore Runtime Signal
+
+**Status:** ${badge}  
+**Score:** ${score}  
+**Warned:** ${warned}  
+**First Warning t:** ${t}
+
+${score < 50 ? "❌ High irreversibility risk detected" : ""}
+${score < 80 && score >= 50 ? "⚠ Early warning signal detected" : ""}
+${score >= 80 ? "✅ System trajectory stable" : ""}
+`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
